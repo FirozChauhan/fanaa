@@ -1,7 +1,8 @@
 # Fanaa API — Cloudflare Workers deployment
-# Env vars (DATABASE_URL, RESEND_API_KEY) are set as secrets:
+# Env vars (DATABASE_URL, CLERK_SECRET_KEY, optional RESEND_API_KEY) are set
+# as secrets:
 #   bunx wrangler secret put DATABASE_URL
-#   bunx wrangler secret put RESEND_API_KEY
+#   bunx wrangler secret put CLERK_SECRET_KEY
 name = "fanaa-api"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"

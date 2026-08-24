@@ -34,7 +34,7 @@ export async function cmdLogin(argEmail?: string): Promise<void> {
   }
   const code = (await promptText("6-digit code")).trim();
 
-  const { token } = await verifyCode(apiUrl, email, code);
+  const { token } = await verifyCode(apiUrl, email, code, req.verification_id);
   st.apiUrl = apiUrl;
   st.email = email;
   st.token = token;

@@ -61,8 +61,16 @@ async function api<T>(
   return data as T;
 }
 
-/** POST /auth/request — mints a code; channel is "dev" when no email backend is set. */
-export function requestCode(apiUrl: string, email: string): Promise<{ ok: true; channel: "email" | "dev" }> {
+/**
+ * POST /auth/request — starts email verification. channel is "email" when a
+ * real email backend is set (Clerk/Resend), "dev" when the code is printed to
+ * the server console. verification_id is present on the Clerk path and must be
+ * passed back to /auth/verify together with the code.
+ */
+export function requestCode(
+  apiUrl: string,
+  email: string,
+): Promise<{ ok: true; channel: "email" | "dev"; verification_id?: string }> {
   return api(apiUrl, "/auth/request", { method: "POST", body: { email } });
 }
 
@@ -71,8 +79,9 @@ export function verifyCode(
   apiUrl: string,
   email: string,
   code: string,
+  verificationId?: string,
 ): Promise<{ token: string; user: { id: string; email: string } }> {
-  return api(apiUrl, "/auth/verify", { method: "POST", body: { email, code } });
+  return api(apiUrl, "/auth/verify", { method: "POST", body: { email, code, verification_id: verificationId } });
 }
 
 /** GET /letters — all letters, or those changed after `since` (ISO). */
