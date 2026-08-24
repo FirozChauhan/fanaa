@@ -107,7 +107,7 @@ function Title() {
  * advances into the app; the CLI wrapper skips it when relaunching after
  * the vim handoff (FANAA_NO_SPLASH) so the write loop stays snappy.
  */
-function Splash({ onDone }: { onDone: () => void }) {
+function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
   useInput(() => onDone());
   useEffect(() => {
     const t = setTimeout(onDone, 1100);
@@ -117,7 +117,7 @@ function Splash({ onDone }: { onDone: () => void }) {
   return (
     <Box
       width="100%"
-      height="100%"
+      height={rows}
       flexDirection="column"
       alignItems="center"
       justifyContent="center"
@@ -535,7 +535,7 @@ export function App() {
   const maxOffset = Math.max(0, bodyLines.length - (listH - 5));
 
   if (splash) {
-    return <Splash onDone={() => setSplash(false)} />;
+    return <Splash rows={rows} onDone={() => setSplash(false)} />;
   }
 
   if (view === "help") {
