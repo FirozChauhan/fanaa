@@ -2,14 +2,23 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fanaaRoot, parseDateStamp, parseEntry, type EntryMeta } from "fanaa-core";
 
+/**
+ * In-memory letter model for the TUI: loads every entry from the store,
+ * parses its frontmatter once, and provides the sort/search/timeline
+ * orders. `key` is the full file key (YYYY-MM-DD-HHMM-XXXXXX), so sorting
+ * by key IS sorting by date.
+ */
+
 export interface Letter {
-  /** YYYY-MM-DD */
+  /** Full file key, e.g. 2026-08-24-1225-SY8AIN (date-desc sortable). */
   key: string;
+  /** Parsed from the frontmatter date stamp. */
   date: Date;
   meta: EntryMeta;
   body: string;
 }
 
+/** Read every entry file in the journal, newest key first. */
 export function loadLetters(root?: string): Letter[] {
   const r = root ?? fanaaRoot();
   const glob = new Bun.Glob("entries/**/*.md");
@@ -42,6 +51,11 @@ export function dayCounts(letters: Letter[]): Map<string, number> {
   return m;
 }
 
+/**
+ * Consecutive-day writing streak. Counts back from today (or yesterday,
+ * if today has no entry yet — the streak stays alive until midnight);
+ * stops at the first day without a letter.
+ */
 export function computeStreak(counts: Map<string, number>, now = new Date()): number {
   const key = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

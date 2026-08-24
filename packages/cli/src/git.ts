@@ -2,6 +2,13 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+/**
+ * The journal store is a git repo: every write/edit/delete is a commit, so
+ * the whole letter archive is versioned and diffable (one entry file = one
+ * commit, subject line = the letter's subject).
+ */
+
+/** Run git in `root`, returning status + trimmed stdout/stderr. */
 function git(root: string, args: string[]) {
   const res = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
   return {
@@ -17,6 +24,7 @@ export function gitEmail(): string | null {
   return res.status === 0 && res.stdout ? res.stdout : null;
 }
 
+/** Initialize a repo (main branch) at `root` if it doesn't have one yet. */
 export function ensureRepo(root: string): void {
   if (!existsSync(join(root, ".git"))) {
     const res = git(root, ["init", "-b", "main"]);
@@ -25,8 +33,10 @@ export function ensureRepo(root: string): void {
 }
 
 /**
- * Commit an entry file. Returns short hash, or null if nothing changed.
- * Auto-configures a local git identity if the user has none globally.
+ * Commit an entry file. Returns the short hash, or null if there was
+ * nothing to commit (e.g. an edit that changed nothing). If the user has
+ * no global git identity, a local repo-level one ("Fanaa") is configured
+ * so commits still succeed on first use.
  */
 export function commitEntry(root: string, file: string, subject: string): string | null {
   ensureRepo(root);

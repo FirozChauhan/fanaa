@@ -13,6 +13,20 @@ import { fanaaRoot } from "fanaa-core";
 import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
 
+/**
+ * The fanaa command-line interface (`bin fanaa` → this file).
+ *
+ * Command surface: `fanaa` (editor letter), `add`/`write`, `read <date>`,
+ * `ls`, `whoami`, `tui`, `-v` (set identity). Bodies come from an editor,
+ * the line composer, a CLI argument, or stdin — see {@link BodyMode}.
+ *
+ * The `tui` command is a handoff loop: the Ink app is a separate process
+ * that fully exits before vim runs (terminal handoff), then restarts. The
+ * exit code is the protocol — 66 = "compose/edit/delete requested" with
+ * the request stashed in `~/.fanaa/.tui-pending`; 130 = ctrl+c in the
+ * editor (back to the TUI); 0 = normal quit.
+ */
+
 function help(): void {
   console.log(`fanaa — write letters only you will ever read.
 
@@ -64,6 +78,13 @@ function runEditor(file: string): void {
 
 type BodyMode = "editor" | "lines" | "arg" | "stdin";
 
+/** Where a letter's body comes from, per invocation:
+ *  - `editor`: temp file opened in $EDITOR/vim (plain `fanaa`)
+ *  - `lines`:  interactive readline composer (`fanaa add`)
+ *  - `arg`:    body passed on the command line / handoff file
+ *  - `stdin`:  piped input
+ */
+
 /** Configured journal category ("fanaa" unless changed with -v or --cat). */
 function activeCategory(flag?: string): string {
   if (flag?.trim()) return flag.trim();
@@ -75,6 +96,12 @@ function journalStore(category: string): string {
   return journalRoot(fanaaRoot(), category);
 }
 
+/**
+ * Write (or rewrite, for the TUI editor handoff) a letter.
+ * Resolves identity from flags → config → git email, dedupes the key with
+ * `-2`, `-3`…, serializes frontmatter + body, and commits it. Every capture
+ * is a fresh letter — nothing is merged or pre-filled.
+ */
 async function cmdWrite(opts: {
   dateKey: string;
   from?: string;
@@ -190,6 +217,11 @@ async function cmdDelete(key: string, category = activeCategory()): Promise<void
   console.log(`\u001b[31m\u2717\u001b[0m deleted ${key} (${subj})${tail}`);
 }
 
+/**
+ * Read one or more letters matching a day key or exact letter key
+ * (e.g. `fanaa yesterday`, `fanaa 2026-08-24`, `fanaa 2026-08-24-0930`).
+ * All matches are printed newest-first, email-style.
+ */
 async function cmdRead(arg: string): Promise<void> {
   const root = journalStore(activeCategory());
   const exact = /^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(arg);
@@ -214,6 +246,7 @@ async function cmdRead(arg: string): Promise<void> {
   });
 }
 
+/** Print who you write as, to, and which journal — from config defaults. */
 function cmdWhoami(): void {
   const store = fanaaRoot();
   const cfg = loadConfig(store);
@@ -226,6 +259,12 @@ function cmdWhoami(): void {
   console.log(dim("Use `fanaa -v` to change."));
 }
 
+/**
+ * Parse argv and dispatch. Flag parsing is intentionally manual (no
+ * dependency): `-v/--values`, `--from`, `--to`, `--cat/--category`,
+ * `-s/--subject`, `--date`, `-h/--help`; anything else is positional
+ * (command, then args). Unknown flags are an error.
+ */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let values = false;

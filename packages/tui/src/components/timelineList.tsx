@@ -3,6 +3,13 @@ import { Text } from "ink";
 import type { Letter } from "../data";
 import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
 
+/**
+ * The timeline sidebar (`t` mode): a folder-style Year → Month → entries
+ * tree with real connectors, collapsible months, and row-based selection.
+ * Pure renderer — collapse state, ordering, and the row list come from App
+ * (via buildTree); this component only draws a window of it.
+ */
+
 /** One row of the timeline sidebar tree. */
 export type TreeRow =
   | { kind: "year"; text: string }

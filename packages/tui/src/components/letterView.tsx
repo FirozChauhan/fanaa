@@ -4,7 +4,12 @@ import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
 import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, wrapBodyCached } from "../util";
 
-/** A letter, laid out like a real letter: date, from/to, subject heading, body. */
+/**
+ * A letter, laid out like a real letter: date/time, from/to, subject heading,
+ * divider rule, then the markdown-formatted body (wrapped, scrollable via
+ * `offset`). Serves both the browse-mode preview pane and the focused letter
+ * view (which passes a highlightSubject flag and its own offset).
+ */
 export function LetterView({
   letter,
   width,

@@ -1,5 +1,15 @@
 import { join } from "node:path";
 
+/**
+ * Date & key utilities shared by every fanaa surface (CLI + TUI).
+ *
+ * A letter is one markdown file at `entries/YYYY/MM/YYYY-MM-DD-HHMM-XXXXXX.md`.
+ * The FILE KEY (full `YYYY-MM-DD-HHMM-XXXXXX`) is the sort key used everywhere
+ * (lists, the TUI timeline); the ID shown in the UI is the HHMM+hash tail (see
+ * {@link entryIdFromKey}).
+ */
+
+/** Zero-pad a number to `len` digits (default 2). */
 export function pad(n: number, len = 2): string {
   return String(n).padStart(len, "0");
 }
@@ -31,11 +41,19 @@ export function rfcDate(d: Date): string {
   });
 }
 
+/**
+ * Parse a `YYYY-MM-DD` key into a local-time Date at midnight.
+ * (Only the day matters — stamps carry the time separately.)
+ */
 export function parseDayKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
+/**
+ * Parse a frontmatter `date` stamp. Accepts the local ISO form
+ * (`YYYY-MM-DDTHH:MM:SS+05:30`, offset ignored) and falls back to now.
+ */
 export function parseDateStamp(s?: string): Date {
   if (!s) return new Date();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
@@ -76,7 +94,11 @@ export function entryIdFromKey(key: string): string {
   return key.slice(11, 15) + key.slice(16);
 }
 
-/** Parse a user-supplied date string into a key (day or exact letter). */
+/**
+ * Parse a user-supplied date argument into a key: `today`/`yesterday`,
+ * `YYYY-MM-DD`, `MM-DD` (current year), or an exact letter key
+ * `YYYY-MM-DD-HHMM` with optional `-2`/hash suffix. Null if unrecognized.
+ */
 export function parseDateArg(s: string): string | null {
   const now = new Date();
   if (s === "today") return dayKey(now);

@@ -1,13 +1,26 @@
+/**
+ * Entry model: a letter is frontmatter (date/id/from/to/subject) + a
+ * free-form body, serialized to markdown. Both CLI and TUI parse and
+ * serialize through here so the on-disk format stays a single source
+ * of truth (any stray frontmatter fields are ignored on read).
+ */
+
 export interface EntryMeta {
+  /** Local ISO stamp, e.g. 2026-08-24T07:30:00+05:30. */
   date?: string;
+  /** The unique HHMM+hash ID shown in the UI (see entryIdFromKey). */
   id?: string;
+  /** Sender name/address — defaults to git email. */
   from?: string;
+  /** Recipient, conventionally "ME". */
   to?: string;
+  /** One-line subject. */
   subject?: string;
 }
 
 export interface ParsedEntry {
   meta: EntryMeta;
+  /** Everything after the closing `---`, leading blank lines stripped. */
   body: string;
 }
 
@@ -35,7 +48,11 @@ export function parseEntry(text: string): ParsedEntry {
   return { meta, body };
 }
 
-/** Serialize frontmatter + body, always ending with a newline. */
+/**
+ * Serialize frontmatter + body back to the canonical format. Unknown meta
+ * keys are dropped (they were never read); the file always ends with a
+ * newline. The body's own leading blank lines are trimmed.
+ */
 export function serializeEntry(meta: EntryMeta, body: string): string {
   const lines = [
     "---",

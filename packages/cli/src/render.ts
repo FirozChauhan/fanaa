@@ -1,6 +1,12 @@
 import { parseDateStamp, rfcDate } from "fanaa-core";
 import type { EntryMeta } from "fanaa-core";
 
+/**
+ * Terminal output helpers for the CLI (not the TUI). When stdout is a real TTY,
+ * ANSI dim/bold escapes are emitted; otherwise they're stripped so the output
+ * is clean for pipes and redirection.
+ */
+
 const color = process.stdout.isTTY === true;
 
 export function dim(s: string): string {

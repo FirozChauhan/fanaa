@@ -2,9 +2,15 @@ import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 
 /**
- * When stdin is piped (not a TTY), pre-read all lines once so sequential
- * prompts can consume them deterministically (readline + EOF is flaky).
- * For a TTY this stays empty and we use real interactive prompts.
+ * Prompt helpers: when stdin is a TTY, `promptText` asks interactively;
+ * when piped, it consumes lines from the pre-read buffer so the entire
+ * pipeline (e.g. `echo -e "subject\nbody" | fanaa`) is deterministic
+ * and doesn't deadlock on readline EOF.
+ */
+
+/**
+ * Pre-read piped stdin once at module load. For TTY this stays empty
+ * and we use real interactive prompts.
  */
 const pipedLines: string[] = (() => {
   if (process.stdin.isTTY) return [];
@@ -17,7 +23,10 @@ const pipedLines: string[] = (() => {
   }
 })();
 
-/** Simple interactive prompt with a default value shown dimmed. */
+/**
+ * Interactive prompt with a dimmed default value. When stdin is piped,
+ * returns the next pre-read line (or the default).
+ */
 export async function promptText(label: string, def?: string): Promise<string> {
   if (!process.stdin.isTTY) {
     return pipedLines.shift() ?? def ?? "";

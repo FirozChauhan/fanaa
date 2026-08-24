@@ -13,6 +13,23 @@ import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrap
 // The wrapper passes the active journal category; entries live in its repo.
 import { readFileSync } from "node:fs";
 
+/**
+ * The fanaa TUI — a full-screen Ink app with four views:
+ *
+ *   browse   two-pane letter library (sidebar + preview), with search (`/`),
+ *            sort (`s`), and a folder-style timeline sidebar (`t`) whose
+ *            months can be collapsed (▸) / expanded (▾)
+ *   letter   focused reading pane — scrollable body, `n` jumps between
+ *            #highlight# lines, `f` fullscreen
+ *   compose  subject prompt that hands off to vim (see {@link handOff})
+ *   help     keybinding popup
+ *
+ * Editing is deliberately out-of-process: the TUI writes the request to
+ * `~/.fanaa/.tui-pending`, exits 66, and the CLI wrapper (packages/cli)
+ * opens vim, saves the entry, and relaunches this app. That keeps raw
+ * terminal input entirely inside one program instead of a TUI↔vim fight.
+ */
+
 const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
 const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
@@ -24,9 +41,18 @@ const VERSION = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ).version as string;
 
-// Timeline sidebar rows: Year → Month → letters, plus letter→row index map.
-// Collapsed months have their letters omitted from the rows. Standalone so the
-// `t` handler can compute rows while the memo's `tree` is null.
+/**
+ * Build the timeline sidebar's row list from letters, dropping the entries
+ * of collapsed months (keyed "YYYY-MM" in `col`). Also returns a map of
+ * visible letter key → row index, so the selection can jump to a letter's
+ * row — or detect that its month is collapsed (letter absent from the map)
+ * and fall back to a neighboring visible one.
+ *
+ * Module-scope on purpose: the `t` toggle handler calls it while the memo's
+ * `tree` is null, and React runs `useMemo` factories eagerly on first render,
+ * so a `const buildTree` declared later in the component body would throw a
+ * TDZ ReferenceError before initialization.
+ */
 function buildTree(lst: Letter[], col: Set<string>) {
   const rows: TreeRow[] = [];
   const map = new Map<string, number>();
@@ -128,6 +154,15 @@ function HelpOverlay({
   );
 }
 
+/**
+ * Root component. Owns ALL state (no context/reducers): letters, selection
+ * (idx flat / tIdx tree), view, search query, sort mode, timeline mode,
+ * collapsed months, letter scroll offset, highlight jump index.
+ *
+ * Ordering rule: every hook and derived value (layout math, wrapped body,
+ * highlights) must run BEFORE the early returns for help/compose/empty —
+ * otherwise React throws "Rendered fewer hooks than expected".
+ */
 export function App() {
   const { stdout } = useStdout();
   const [letters, setLetters] = useState<Letter[]>(() => loadLetters(JOURNAL));

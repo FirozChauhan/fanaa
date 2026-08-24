@@ -3,6 +3,15 @@ import { Text } from "ink";
 import type { Letter } from "../data";
 import { GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
 
+/**
+ * The flat (non-timeline) sidebar: one row per letter — unique ID (HHMM+hash)
+ * + subject. The selected row gets a full-width background: the subject is
+ * padded to the computed width so the SEL_BG span covers the whole line.
+ *
+ * Receives a pre-sliced viewport (`letters.slice(top, top+height)` from App)
+ * plus the selection offset within it.
+ */
+
 /** Capitalize the first letter of a string. */
 function cap(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;

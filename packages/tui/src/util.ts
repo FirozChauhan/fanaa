@@ -1,3 +1,12 @@
+/**
+ * Shared color palette, text helpers, and the markdown→styled-segments
+ * pipeline for the TUI.
+ *
+ * The palette is a warm paper-and-ink scheme; every component imports these
+ * constants rather than hardcoding hex values. Text helpers are terminal-
+ * agnostic (no ANSI escapes — Ink renders the styles).
+ */
+
 // Warm paper-and-ink palette for the TUI.
 export const ACCENT = "#ffa94d"; // ember orange — the beloved
 export const GOLD = "#ffd88a"; // bright gold — today, selection, subjects
@@ -27,12 +36,20 @@ export function gradientColors(text: string, from: string, to: string): string[]
   });
 }
 
+/**
+ * Truncate to at most n chars, appending an ellipsis when cut.
+ * n <= 1 avoids the ellipsis (a single char is kept as-is).
+ */
 export function truncate(s: string, n: number): string {
   if (n <= 1) return s.slice(0, Math.max(0, n));
   return s.length > n ? s.slice(0, n - 1) + "\u2026" : s;
 }
 
 /** Greedy word wrap; returns lines no longer than width. */
+/**
+ * Greedy word wrap; returns lines no longer than width. Splits on spaces,
+ * never mid-word; a word longer than width becomes its own (overlong) line.
+ */
 export function wrap(s: string, width: number): string[] {
   const out: string[] = [];
   for (const raw of s.split("\n")) {

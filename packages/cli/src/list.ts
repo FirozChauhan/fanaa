@@ -3,6 +3,12 @@ import { basename, join } from "node:path";
 import { parseEntry } from "fanaa-core";
 import { bold, dim } from "./render";
 
+/**
+ * `fanaa ls` — prints the N most recent entries as a compact list:
+ * `key  from → to  subject`. The CLI uses this directly; the TUI has
+ * its own richer rendering in the sidebar.
+ */
+
 interface ListRow {
   key: string;
   subject: string;
