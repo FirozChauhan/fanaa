@@ -6,6 +6,7 @@ import TextInput from "ink-text-input";
 import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadLetters, dayCounts, computeStreak, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
+import { TimelineList, type TreeRow } from "./components/timelineList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
 
@@ -54,7 +55,8 @@ function HelpOverlay({
     ["j/k ↑↓", "navigate"],
     ["g / G", "top / bottom"],
     ["/", "search letters"],
-    ["S", "sort: date→alpha→len"],
+    ["s", "sort: date→alpha→len"],
+    ["t", "timeline sidebar"],
     ["enter", "read letter"],
     ["a", "write new"],
     ["e", "edit letter"],
@@ -109,6 +111,7 @@ export function App() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("date");
+  const [timeline, setTimeline] = useState(false);
 
   // Terminal size in state: Ink's own resize handler re-lays-out the existing
   // vDOM but never re-invokes component functions, so a bare `stdout.rows`
@@ -134,9 +137,35 @@ export function App() {
     if (!q) return sorted;
     return sorted.filter((l) => (l.meta.subject + "\n" + l.body).toLowerCase().includes(q));
   }, [sorted, q]);
-  // Selection stays within the filtered list even as search/sort shrink it.
-  const fIdx = Math.min(idx, Math.max(0, filtered.length - 1));
-  const selected = filtered[fIdx];
+  // Timeline mode pins chronological order (overrides the current sort mode).
+  const order = useMemo(() => (timeline ? sortLetters(filtered, "date") : filtered), [timeline, filtered]);
+  // Selection stays within the ordered list even as search/sort/timeline shrink it.
+  const fIdx = Math.min(idx, Math.max(0, order.length - 1));
+  const selected = order[fIdx];
+  // Timeline sidebar rows: Year → Month → letters, plus letter→row index map.
+  const tree = useMemo(() => {
+    if (!timeline) return null;
+    const rows: TreeRow[] = [];
+    const map: number[] = [];
+    let lastYear = "";
+    let lastMonth = "";
+    for (const l of order) {
+      const y = l.key.slice(0, 4);
+      const m = l.key.slice(5, 7);
+      if (y !== lastYear) {
+        rows.push({ kind: "year", text: y });
+        lastYear = y;
+        lastMonth = "";
+      }
+      if (m !== lastMonth) {
+        rows.push({ kind: "month", text: m });
+        lastMonth = m;
+      }
+      map.push(rows.length);
+      rows.push({ kind: "letter", letter: l });
+    }
+    return { rows, map };
+  }, [timeline, order]);
   const stats = useMemo(() => {
     const counts = dayCounts(letters);
     return { total: letters.length, streak: computeStreak(counts) };
@@ -222,7 +251,8 @@ export function App() {
       setSearching(true);
       setIdx(0);
     }
-    else if (input === "S") setSortMode((m) => (m === "date" ? "alpha" : m === "alpha" ? "len" : "date"));
+    else if (input === "s") setSortMode((m) => (m === "date" ? "alpha" : m === "alpha" ? "len" : "date"));
+    else if (input === "t") setTimeline((v) => !v);
     else if (key.return && selected) {
       setOffset(0);
       setHlIdx(-1);
@@ -309,11 +339,15 @@ export function App() {
     );
   }
 
-  const listTop = Math.min(Math.max(0, fIdx - listH + 1), Math.max(0, fIdx));
-  const visible = filtered.slice(listTop, listTop + listH);
-  const selInList = fIdx - listTop;
+  // Scroll window over the sidebar rows (letters, or tree rows in timeline mode).
+  const listLen = tree ? tree.rows.length : filtered.length;
+  const selRow = tree ? (tree.map[fIdx] ?? 0) : fIdx;
+  const listTop = tree
+    ? Math.min(Math.max(0, selRow - listH + 1), Math.max(0, listLen - listH))
+    : Math.min(Math.max(0, fIdx - listH + 1), Math.max(0, fIdx));
+  const selInList = selRow - listTop;
   const hasAbove = listTop > 0;
-  const hasBelow = filtered.length > listTop + listH;
+  const hasBelow = listLen > listTop + listH;
 
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
@@ -370,12 +404,21 @@ export function App() {
             ) : (
               <>
                 {hasAbove && <Text color={FAINT}>{" \u2191"}</Text>}
-                <LetterList
-                  letters={visible}
-                  selected={selInList}
-                  width={listW - 1}
-                  height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
-                />
+                {tree ? (
+                  <TimelineList
+                    rows={tree.rows.slice(listTop, listTop + listH)}
+                    selRow={selInList}
+                    width={listW - 1}
+                    height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
+                  />
+                ) : (
+                  <LetterList
+                    letters={filtered.slice(listTop, listTop + listH)}
+                    selected={selInList}
+                    width={listW - 1}
+                    height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
+                  />
+                )}
                 {hasBelow && <Text color={FAINT}>{" \u2193"}</Text>}
               </>
             )}
@@ -411,8 +454,16 @@ export function App() {
       <Box paddingX={1}>
         <Text color={MUTED}>{VERSION}</Text>
         <Text color={FAINT}> · </Text>
+        {!timeline && (
+          <>
+            <Text color={FAINT}>
+              <Text color={MUTED}>S</Text>: {sortMode}
+            </Text>
+            <Text color={FAINT}> · </Text>
+          </>
+        )}
         <Text color={FAINT}>
-          <Text color={MUTED}>S</Text>: {sortMode}
+          <Text color={MUTED}>T</Text>: {timeline ? "timeline" : "list"}
         </Text>
         <Text color={FAINT}> · </Text>
         <Text color={FAINT}>

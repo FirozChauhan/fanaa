@@ -1,6 +1,6 @@
 {
   "name": "fanaa",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "type": "module",
   "private": true,
   "description": "Fanaa — terminal journal of letters to yourself",
