@@ -54,6 +54,8 @@ async function cmdWrite(opts: {
   values: boolean;
   mode: BodyMode;
   argBody?: string;
+  /** TUI compose: open a blank buffer, then append to the day's entry. */
+  blank?: boolean;
 }): Promise<void> {
   const root = fanaaRoot();
   const cfg = loadConfig(root);
@@ -82,9 +84,10 @@ async function cmdWrite(opts: {
   let newBody: string;
   if (opts.mode === "editor") {
     const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
-    writeFileSync(tmp, prevBody);
+    writeFileSync(tmp, opts.blank ? "" : prevBody);
     runEditor(tmp);
     newBody = readFileSync(tmp, "utf8");
+    if (opts.blank) newBody = prevBody ? `${prevBody}\n${newBody}` : newBody;
   } else if (opts.mode === "lines") {
     const composed = await composeLines(prevBody);
     newBody = prevBody ? `${prevBody}\n${composed}` : composed;
@@ -180,7 +183,7 @@ async function main(): Promise<void> {
       if (res.status === 66) {
         const subject = existsSync(pending) ? readFileSync(pending, "utf8").trim() : "";
         rmSync(pending, { force: true });
-        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false });
+        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false, blank: true });
         continue;
       }
       if (res.status === 0) break; // normal quit
