@@ -37,7 +37,7 @@ letters.use("*", requireUser);
 letters.get("/", async (c) => {
   const since = c.req.query("since");
   const user = c.get("user");
-  const s = db();
+  const s = await db();
   const rows = (since
     ? await s`SELECT id, date, from_addr, to_addr, subject, body, updated_at, deleted_at FROM letters WHERE user_id = ${user.id} AND updated_at > ${new Date(since)} ORDER BY updated_at`
     : await s`SELECT id, date, from_addr, to_addr, subject, body, updated_at, deleted_at FROM letters WHERE user_id = ${user.id} ORDER BY updated_at`) as LetterRow[];
@@ -78,7 +78,7 @@ letters.post("/batch", async (c) => {
   if (!items) return c.json({ error: "body.letters must be an array" }, 400);
 
   const user = c.get("user");
-  const s = db();
+  const s = await db();
   let accepted = 0;
   for (const it of items) {
     const id = String(it?.id ?? "").trim();
@@ -103,7 +103,7 @@ letters.post("/batch", async (c) => {
 /** POST /letters/:id/delete — tombstone (updated_at bumped so it syncs). */
 letters.post("/:id/delete", async (c) => {
   const user = c.get("user");
-  const s = db();
+  const s = await db();
   const rows = (await s`
     UPDATE letters SET deleted_at = now(), updated_at = now()
     WHERE user_id = ${user.id} AND id = ${c.req.param("id")} AND deleted_at IS NULL

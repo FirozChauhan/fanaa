@@ -1,0 +1,11 @@
+# Fanaa API — Cloudflare Workers deployment
+# Env vars (DATABASE_URL, RESEND_API_KEY) are set as secrets:
+#   bunx wrangler secret put DATABASE_URL
+#   bunx wrangler secret put RESEND_API_KEY
+name = "fanaa-api"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+# nodejs_compat makes process.env (and node: crypto) available; with a
+# compat date >= 2025-04-01 the *_populate_process_env flag is default-on,
+# listed explicitly for older pinning.
+compatibility_flags = ["nodejs_compat", "nodejs_compat_populate_process_env"]

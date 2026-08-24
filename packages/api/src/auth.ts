@@ -26,7 +26,7 @@ auth.post("/request", async (c) => {
   const email = String(body?.email ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return c.json({ error: "invalid email" }, 400);
 
-  const s = db();
+  const s = await db();
   const recent = (await s`SELECT created_at FROM auth_codes WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`) as { created_at: Date | string }[];
   if (recent[0] && Date.now() - new Date(recent[0].created_at).getTime() < CODE_RESEND_COOLDOWN_SECONDS * 1000) {
     return c.json({ error: "slow down — wait a minute before requesting another code" }, 429);
@@ -60,7 +60,7 @@ auth.post("/verify", async (c) => {
     return c.json({ error: "email or code malformed" }, 400);
   }
 
-  const s = db();
+  const s = await db();
   const rows = (await s`SELECT code FROM auth_codes WHERE email = ${email} AND expires_at > now()`) as { code: string }[];
   if (rows.length === 0 || rows[0].code !== code) {
     return c.json({ error: "invalid or expired code" }, 401);
@@ -84,7 +84,7 @@ export const requireUser: MiddlewareHandler<ApiEnv> = async (c, next) => {
   const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
   if (!token) return c.json({ error: "unauthorized" }, 401);
 
-  const s = db();
+  const s = await db();
   const rows = (await s`SELECT u.id, u.email FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ${token} AND s.expires_at > now()`) as { id: string; email: string }[];
   if (rows.length === 0) return c.json({ error: "unauthorized" }, 401);
 
