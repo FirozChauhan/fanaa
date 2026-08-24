@@ -113,18 +113,35 @@ const SPLASH_LOGO = `███████ ███████ ██   ██
 ██      ██   ██ ██  ███ ██   ██ ██   ██
 ██      ██   ██ ██   ██ ██   ██ ██   ██`;
 
+/** Braille spinner frames — narrow (1 cell) in every terminal. */
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/** Boot splash duration before auto-advancing (any key skips sooner). */
+const SPLASH_MS = 3000;
+
 /**
- * Boot splash: the word FANAA centered on screen. Any key (or ~1.1s)
+ * Boot splash: the word FANAA centered on screen. Any key (or ~3s)
  * advances into the app; the CLI wrapper skips it when relaunching after
  * the vim handoff (FANAA_NO_SPLASH) so the write loop stays snappy.
  */
 function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
   useInput(() => onDone());
+  // Auto-advance after the boot moment (any key skips sooner).
   useEffect(() => {
-    const t = setTimeout(onDone, 1100);
+    const t = setTimeout(onDone, SPLASH_MS);
     return () => clearTimeout(t);
   }, [onDone]);
-  const colors = gradientColors(SPLASH_LOGO.replace(/\n/g, ""), AMBER, GOLD);
+  // Animated loading spinner while the splash is up.
+  const [spin, setSpin] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSpin((s) => (s + 1) % SPINNER.length), 90);
+    return () => clearInterval(t);
+  }, []);
+  // Logo is static — parse + gradient once per mount.
+  const { lines, colors } = useMemo(() => {
+    const lines = SPLASH_LOGO.split("\n");
+    const colors = gradientColors(SPLASH_LOGO.replace(/\n/g, ""), AMBER, GOLD);
+    return { lines, colors };
+  }, []);
   let ci = 0;
   return (
     <Box
@@ -135,7 +152,7 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
       justifyContent="center"
     >
       <Box flexDirection="column" alignItems="center">
-        {SPLASH_LOGO.split("\n").map((ln, i) => (
+        {lines.map((ln, i) => (
           <Text key={i} bold>
             {[...ln].map((c, j) => {
               const col = colors[ci++];
@@ -153,6 +170,10 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
       </Box>
       <Box marginTop={1}>
         <Text color={DIVIDER}>{VERSION}</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color={MUTED}>{SPINNER[spin]}</Text>
+        <Text color={FAINT}> loading</Text>
       </Box>
     </Box>
   );
@@ -613,14 +634,23 @@ export function App() {
   if (view === "letter") {
     // letter shares the split layout below; fullscreen is a pane-level toggle
   } else if (letters.length === 0) {
+    // All children must be Boxes: Ink/Yoga corrupts text measurement when
+    // bare <Text> siblings are mixed with <Box> children in a centered
+    // column ("no letters yet" vanished / texts merged — see repro3).
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
-        <Title />
+        <Box>
+          <Title />
+        </Box>
         <Box marginTop={1}>
           <Text color={MUTED}>no letters yet</Text>
         </Box>
-        <Text color={FAINT}>press a to write your first one</Text>
-        <Text color={FAINT}>press p to sync from the cloud</Text>
+        <Box marginTop={1}>
+          <Text color={FAINT}>press a to write your first one</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color={FAINT}>press p to sync from the cloud</Text>
+        </Box>
       </Box>
     );
   }
