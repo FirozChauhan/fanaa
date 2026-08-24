@@ -24,6 +24,17 @@ export function loadLetters(root?: string): Letter[] {
   return out;
 }
 
+export type SortMode = "date" | "alpha" | "len";
+
+/** Reorder letters by date (newest first), subject alphabetically, or body length. */
+export function sortLetters(letters: Letter[], mode: SortMode): Letter[] {
+  const out = [...letters];
+  if (mode === "alpha") out.sort((a, b) => (a.meta.subject || "").localeCompare(b.meta.subject || ""));
+  else if (mode === "len") out.sort((a, b) => a.body.length - b.body.length);
+  else out.sort((a, b) => b.key.localeCompare(a.key));
+  return out;
+}
+
 /** YYYY-MM-DD → number of entries that day. */
 export function dayCounts(letters: Letter[]): Map<string, number> {
   const m = new Map<string, number>();

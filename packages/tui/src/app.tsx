@@ -4,11 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot, journalRoot } from "fanaa-core";
-import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
+import { loadLetters, dayCounts, computeStreak, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
-import { inKitty, listMonospaceFonts, setKittyFont } from "./fonts";
 
 // The wrapper passes the active journal category; entries live in its repo.
 import { readFileSync } from "node:fs";
@@ -43,21 +42,19 @@ function Title() {
 function HelpOverlay({
   cols,
   rows,
-  fonts,
-  fontStatus,
   onClose,
 }: {
   cols: number;
   rows: number;
-  fonts: string[];
-  fontStatus: string;
   onClose: () => void;
 }) {
-  const w = Math.min(64, cols - 4);
-  const h = Math.min(24, rows - 2);
+  const w = Math.min(44, cols - 4);
+  const h = Math.min(20, rows - 4);
   const binds: [string, string][] = [
     ["j/k ↑↓", "navigate"],
     ["g / G", "top / bottom"],
+    ["/", "search letters"],
+    ["S", "sort: date→alpha→len"],
     ["enter", "read letter"],
     ["a", "write new"],
     ["e", "edit letter"],
@@ -93,28 +90,7 @@ function HelpOverlay({
           </Text>
         ))}
       </Box>
-      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, w - 4))}</Text>
-      <Text bold color={GOLD}>
-        FONTS (kitty)
-      </Text>
-      <Box flexDirection="column">
-        {[0, 1].map((row) => (
-          <Text key={row}>
-            {[0, 1, 2].map((col) => {
-              const i = row * 3 + col;
-              if (i >= fonts.length) return <Text key={i}>{" ".repeat(19)}</Text>;
-              return (
-                <Text key={i}>
-                  <Text color={ACCENT}>{i + 1}</Text>
-                  <Text color={PAPER}> {fonts[i].slice(0, 17).padEnd(17)}</Text>
-                </Text>
-              );
-            })}
-          </Text>
-        ))}
-      </Box>
-      <Text color={fontStatus.startsWith("font set") ? FAINT : AMBER}>{fontStatus}</Text>
-      <Text color={FAINT}>1-6 = font · esc / h — close</Text>
+      <Text color={FAINT}>esc / h — close</Text>
     </Box>
   );
 }
@@ -129,11 +105,10 @@ export function App() {
   const [offset, setOffset] = useState(0);
   const [hlIdx, setHlIdx] = useState(-1); // -1 = before first highlight
   const [subject, setSubject] = useState("");
-  // Installed monospace fonts for the help popup's font picker (kitty).
-  const [fonts] = useState<string[]>(() => listMonospaceFonts());
-  const [fontStatus, setFontStatus] = useState(() =>
-    inKitty() ? "1-6 = change font family" : "fonts: only inside kitty"
-  );
+  // Search + sort state (browse mode).
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>("date");
 
   // Terminal size in state: Ink's own resize handler re-lays-out the existing
   // vDOM but never re-invokes component functions, so a bare `stdout.rows`
@@ -152,7 +127,16 @@ export function App() {
   // would collapse every layout to nothing.
   const cols = Math.max(40, dims.cols);
   const rows = Math.max(12, dims.rows);
-  const selected = letters[idx];
+  // Sorted + search-filtered views of the letters.
+  const sorted = useMemo(() => sortLetters(letters, sortMode), [letters, sortMode]);
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!q) return sorted;
+    return sorted.filter((l) => (l.meta.subject + "\n" + l.body).toLowerCase().includes(q));
+  }, [sorted, q]);
+  // Selection stays within the filtered list even as search/sort shrink it.
+  const fIdx = Math.min(idx, Math.max(0, filtered.length - 1));
+  const selected = filtered[fIdx];
   const stats = useMemo(() => {
     const counts = dayCounts(letters);
     return { total: letters.length, streak: computeStreak(counts) };
@@ -219,16 +203,26 @@ export function App() {
     }
     if (view === "help") {
       if (key.escape || input === "h" || input === "?" || input === "q") setView(helpReturn);
-      else if (/^[1-6]$/.test(input)) {
-        const f = fonts[Number(input) - 1];
-        if (f) setFontStatus(setKittyFont(f).msg);
-      }
       return;
     }
-    if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
+    if (searching) {
+      if (key.escape) {
+        setSearching(false);
+        setQuery("");
+      } else if (key.return || /[\r\n]/.test(input)) setSearching(false);
+      return;
+    }
+    if (key.downArrow || input === "j") setIdx((i) => Math.min(filtered.length - 1, i + 1));
     else if (key.upArrow || input === "k") setIdx((i) => Math.max(0, i - 1));
     else if (input === "g") setIdx(0);
-    else if (input === "G") setIdx(letters.length - 1);
+    else if (input === "G") setIdx(filtered.length - 1);
+    else if (input.startsWith("/")) {
+      // Ink can batch multiple printable keys into one event (e.g. "/tes").
+      setQuery(input.slice(1));
+      setSearching(true);
+      setIdx(0);
+    }
+    else if (input === "S") setSortMode((m) => (m === "date" ? "alpha" : m === "alpha" ? "len" : "date"));
     else if (key.return && selected) {
       setOffset(0);
       setHlIdx(-1);
@@ -241,8 +235,10 @@ export function App() {
     else if (input === "h" || input === "?") {
       setHelpReturn("browse");
       setView("help");
-    } else if (input === "r") setLetters(loadLetters(JOURNAL));
-    else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
+    } else if (input === "r") {
+      setLetters(loadLetters(JOURNAL));
+      setIdx(0);
+    } else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
   // Layout numbers are view-independent (the empty/help/compose returns below
@@ -253,7 +249,7 @@ export function App() {
   const listW = Math.min(42, Math.floor(cols * 0.38));
   const showPreview = inLetter || cols >= 62;
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
-  const listH = Math.max(3, rows - 4);
+  const listH = Math.max(3, rows - 4 - (searching ? 1 : 0));
 
   // Wrapped body lines of the selected letter (shared cache with LetterView).
   const bodyLines = useMemo(() => {
@@ -273,7 +269,7 @@ export function App() {
   if (view === "help") {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
-        <HelpOverlay cols={cols} rows={rows} fonts={fonts} fontStatus={fontStatus} onClose={() => setView(helpReturn)} />
+        <HelpOverlay cols={cols} rows={rows} onClose={() => setView(helpReturn)} />
       </Box>
     );
   }
@@ -313,11 +309,11 @@ export function App() {
     );
   }
 
-  const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
-  const visible = letters.slice(listTop, listTop + listH);
-  const selInList = idx - listTop;
+  const listTop = Math.min(Math.max(0, fIdx - listH + 1), Math.max(0, fIdx));
+  const visible = filtered.slice(listTop, listTop + listH);
+  const selInList = fIdx - listTop;
   const hasAbove = listTop > 0;
-  const hasBelow = letters.length > listTop + listH;
+  const hasBelow = filtered.length > listTop + listH;
 
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
@@ -346,21 +342,42 @@ export function App() {
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 
+      {/* search bar (browse only) */}
+      {searching && view === "browse" && (
+        <Box paddingX={1} height={1}>
+          <Text bold color={ACCENT}>
+            /
+          </Text>
+          <TextInput
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setIdx(0);
+            }}
+            onSubmit={() => setSearching(false)}
+            placeholder="search subject or body"
+          />
+          <Text color={FAINT}> ({filtered.length})</Text>
+        </Box>
+      )}
+
       {/* panes */}
       <Box flexDirection="row" flexGrow={1}>
         {!full && (
           <Box flexDirection="column" width={listW} paddingLeft={1}>
-            {hasAbove && (
-              <Text color={FAINT}>{" \u2191"}</Text>
-            )}
-            <LetterList
-              letters={visible}
-              selected={selInList}
-              width={listW - 1}
-              height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
-            />
-            {hasBelow && (
-              <Text color={FAINT}>{" \u2193"}</Text>
+            {filtered.length === 0 ? (
+              <Text color={AMBER}>no matches for "{query}"</Text>
+            ) : (
+              <>
+                {hasAbove && <Text color={FAINT}>{" \u2191"}</Text>}
+                <LetterList
+                  letters={visible}
+                  selected={selInList}
+                  width={listW - 1}
+                  height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
+                />
+                {hasBelow && <Text color={FAINT}>{" \u2193"}</Text>}
+              </>
             )}
           </Box>
         )}
@@ -395,8 +412,20 @@ export function App() {
         <Text color={MUTED}>{VERSION}</Text>
         <Text color={FAINT}> · </Text>
         <Text color={FAINT}>
+          <Text color={MUTED}>S</Text>: {sortMode}
+        </Text>
+        <Text color={FAINT}> · </Text>
+        <Text color={FAINT}>
           <Text color={MUTED}>H</Text>: Help
         </Text>
+        {q && !searching && view === "browse" && (
+          <>
+            <Text color={FAINT}> · </Text>
+            <Text color={AMBER}>
+              /{q}/ ({filtered.length})
+            </Text>
+          </>
+        )}
       </Box>
     </Box>
   );
