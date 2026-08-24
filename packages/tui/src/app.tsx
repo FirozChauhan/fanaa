@@ -113,10 +113,8 @@ const SPLASH_LOGO = `███████ ███████ ██   ██
 ██      ██   ██ ██  ███ ██   ██ ██   ██
 ██      ██   ██ ██   ██ ██   ██ ██   ██`;
 
-/** Progress-bar loader width (cells) on the splash. */
-const BAR_W = 24;
 /** Boot splash duration before auto-advancing (any key skips sooner). */
-const SPLASH_MS = 3000;
+const SPLASH_MS = 2000;
 
 /**
  * Boot splash: the word FANAA centered on screen. Any key (or ~3s)
@@ -130,16 +128,6 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
     const t = setTimeout(onDone, SPLASH_MS);
     return () => clearTimeout(t);
   }, [onDone]);
-  // Progress-bar loader while the splash is up: fills 0% -> 100% over
-  // SPLASH_MS, so the bar visually completes right as the app appears.
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    const start = Date.now();
-    const t = setInterval(() => {
-      setProgress(Math.min(100, Math.round(((Date.now() - start) / SPLASH_MS) * 100)));
-    }, 60);
-    return () => clearInterval(t);
-  }, []);
   // Logo is static — parse + gradient once per mount.
   const { lines, colors } = useMemo(() => {
     const lines = SPLASH_LOGO.split("\n");
@@ -174,11 +162,6 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
       </Box>
       <Box marginTop={1}>
         <Text color={DIVIDER}>{VERSION}</Text>
-      </Box>
-      <Box marginTop={1}>
-        <Text color={AMBER}>{"█".repeat(Math.round((progress / 100) * BAR_W))}</Text>
-        <Text color={MUTED}>{"░".repeat(BAR_W - Math.round((progress / 100) * BAR_W))}</Text>
-        <Text color={FAINT}> {String(progress).padStart(3)}%</Text>
       </Box>
     </Box>
   );
