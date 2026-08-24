@@ -215,11 +215,9 @@ export function App() {
       {/* footer */}
       <Box paddingX={1}>
         <Text color={FAINT}>
-          <Text color={MUTED}>j/k</Text> nav ·{" "}
-          <Text color={MUTED}>enter</Text> read ·{" "}
-          <Text color={MUTED}>a</Text> write · <Text color={MUTED}>e</Text> edit ·{" "}
-          <Text color={MUTED}>d</Text> del · <Text color={MUTED}>r</Text> ref ·{" "}
-          <Text color={MUTED}>q</Text> quit
+          <Text color={MUTED}>j/k</Text> · <Text color={MUTED}>enter</Text> ·{" "}
+          <Text color={MUTED}>a</Text> · <Text color={MUTED}>e</Text> · <Text color={MUTED}>d</Text> ·{" "}
+          <Text color={MUTED}>r</Text> · <Text color={MUTED}>q</Text>
         </Text>
       </Box>
     </Box>
