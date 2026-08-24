@@ -1,5 +1,5 @@
-import { parseDateStamp, rfcDate } from "./date";
-import type { EntryMeta } from "./entry";
+import { parseDateStamp, rfcDate } from "fanaa-core";
+import type { EntryMeta } from "fanaa-core";
 
 const color = process.stdout.isTTY === true;
 

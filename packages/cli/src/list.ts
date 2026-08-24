@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { parseEntry } from "./entry";
+import { parseEntry } from "fanaa-core";
 import { bold, dim } from "./render";
 
 interface ListRow {

@@ -7,6 +7,9 @@
   "bin": {
     "fanaa": "src/index.ts"
   },
+  "dependencies": {
+    "fanaa-core": "workspace:*"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   }

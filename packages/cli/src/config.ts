@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { configPath } from "./paths";
+import { configPath } from "fanaa-core";
 
 export interface FanaaConfig {
   identity?: {

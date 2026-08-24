@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
-import { dayKey, entryPath, localISO, parseDayKey, parseDateArg } from "./date";
+import { dayKey, entryPath, localISO, parseDayKey, parseDateArg } from "fanaa-core";
 import { composeLines, runEditor } from "./editor";
-import { parseEntry, serializeEntry, type EntryMeta } from "./entry";
+import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
 import { commitEntry, gitEmail } from "./git";
 import { listEntries } from "./list";
-import { fanaaRoot } from "./paths";
+import { fanaaRoot } from "fanaa-core";
 import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
 
@@ -22,6 +23,7 @@ Usage:
   fanaa add             compose letter without opening an editor
   fanaa write           same as \"fanaa add\", explicit
   fanaa yesterday       read a letter  (also: today, YYYY-MM-DD, MM-DD)
+  fanaa tui             the beautiful full-screen TUI
   fanaa ls              list recent letters
   fanaa whoami          show who you write as, and to
   fanaa -v              set from/to/subject (from/to become your defaults)
@@ -168,6 +170,12 @@ async function main(): Promise<void> {
   const cmd = positional[0];
   const dateKey = dateArg ? (parseDateArg(dateArg) ?? dayKey(new Date())) : dayKey(new Date());
 
+  if (cmd === "tui") {
+    const tuiEntry = join(import.meta.dir, "../../tui/src/index.tsx");
+    const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
+    process.exitCode = res.status ?? 1;
+    return;
+  }
   if (cmd === "ls" || cmd === "list") {
     listEntries(root);
     return;
