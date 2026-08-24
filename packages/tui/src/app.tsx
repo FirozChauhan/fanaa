@@ -102,10 +102,23 @@ export function App() {
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
 
+  // Terminal size in state: Ink's own resize handler re-lays-out the existing
+  // vDOM but never re-invokes component functions, so a bare `stdout.rows`
+  // read stays stale until some keystroke forces a re-render. Re-render on
+  // resize so the layout follows the window immediately.
+  const [dims, setDims] = useState({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
+  useEffect(() => {
+    const onResize = () => setDims({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
+    stdout.on("resize", onResize);
+    return () => {
+      stdout.off("resize", onResize);
+    };
+  }, [stdout]);
+
   // Clamp to sane minima: a 0×0 stdout (pipes, weird PTYs, early frames)
   // would collapse every layout to nothing.
-  const cols = Math.max(40, stdout.columns ?? 80);
-  const rows = Math.max(12, stdout.rows ?? 24);
+  const cols = Math.max(40, dims.cols);
+  const rows = Math.max(12, dims.rows);
   const selected = letters[idx];
   const stats = useMemo(() => {
     const counts = dayCounts(letters);
