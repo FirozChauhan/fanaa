@@ -1,6 +1,6 @@
 {
   "name": "fanaa-sync",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "private": true,
   "description": "Fanaa cloud sync — API client, session state, and the local-first outbox engine",

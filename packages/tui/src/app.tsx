@@ -574,6 +574,21 @@ export function App() {
   // overhead); beyond that you may scroll, never further than the last line.
   const maxOffset = Math.max(0, bodyLines.length - (listH - 5));
 
+  // Scroll window over the sidebar rows (letters, or tree rows in timeline
+  // mode). Computed unconditionally: every hook must run on every render —
+  // including the splash one — or React throws "Rendered more hooks than
+  // during the previous render" when the splash advances into the app
+  // (the viewport useMemo used to sit after the splash early-return).
+  const listLen = tree ? tree.rows.length : filtered.length;
+  const selRow = tree ? tRow : fIdx;
+  const listTop = Math.min(Math.max(0, selRow - listH + 1), Math.max(0, listLen - listH));
+  const selInList = selRow - listTop;
+  const hasAbove = listTop > 0;
+  const hasBelow = listLen > listTop + listH;
+  // Stable viewport slice so the memoized LetterList skips re-rendering on
+  // unrelated keystrokes (it only redraws when the window actually moves).
+  const viewport = useMemo(() => filtered.slice(listTop, listTop + listH), [filtered, listTop, listH]);
+
   if (splash) {
     return <Splash rows={rows} onDone={() => setSplash(false)} />;
   }
@@ -654,17 +669,6 @@ export function App() {
       </Box>
     );
   }
-
-  // Scroll window over the sidebar rows (letters, or tree rows in timeline mode).
-  const listLen = tree ? tree.rows.length : filtered.length;
-  const selRow = tree ? tRow : fIdx;
-  const listTop = Math.min(Math.max(0, selRow - listH + 1), Math.max(0, listLen - listH));
-  const selInList = selRow - listTop;
-  const hasAbove = listTop > 0;
-  const hasBelow = listLen > listTop + listH;
-  // Stable viewport slice so the memoized LetterList skips re-rendering on
-  // unrelated keystrokes (it only redraws when the window actually moves).
-  const viewport = useMemo(() => filtered.slice(listTop, listTop + listH), [filtered, listTop, listH]);
 
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
