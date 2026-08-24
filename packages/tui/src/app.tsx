@@ -238,7 +238,6 @@ export function App() {
       {/* header */}
       <Box paddingX={1} alignItems="center">
         <Title />
-        <Text color={MUTED}> v{VERSION}</Text>
         <Box flexGrow={1} />
         <Text color={MUTED}>
           <Text bold color={GOLD}>
@@ -295,6 +294,8 @@ export function App() {
         <Text color={FAINT}>
           <Text color={MUTED}>H</Text>: Help
         </Text>
+        <Box flexGrow={1} />
+        <Text color={MUTED}>v{VERSION}</Text>
       </Box>
     </Box>
   );
