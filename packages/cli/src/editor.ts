@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { stdin, stdout } from "node:process";
 
 /**
@@ -38,6 +39,11 @@ function runExternal(file: string): void {
   }
 }
 
+/**
+ * Open the fanaa editor for a file. Runs as a fresh bun process so its stdin
+ * is pristine — the caller's stdin may have been touched by readline or a
+ * child process (spawnSync), which leaves it unable to receive keys.
+ */
 export function runEditor(path: string): Promise<void> {
   // Only FANAA_EDITOR opts out of the built-in editor — EDITOR/VISUAL never
   // hijack fanaa (vim stays out of this app).
@@ -47,6 +53,13 @@ export function runEditor(path: string): Promise<void> {
   // No terminal to edit in — nothing to do (caller reads the untouched file).
   if (!stdin.isTTY || !stdout.isTTY) return Promise.resolve();
 
+  const entry = join(import.meta.dir, "editor-entry.ts");
+  spawnSync("bun", ["run", entry, path], { stdio: "inherit" });
+  return Promise.resolve();
+}
+
+/** The full-screen editor itself, run by editor-entry.ts in a fresh process. */
+export function interactiveEdit(path: string): Promise<void> {
   return new Promise((resolve) => {
     const raw = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
     const lines = raw ? raw.replace(/\n$/, "").split("\n") : [""];
@@ -148,37 +161,45 @@ export function runEditor(path: string): Promise<void> {
     };
 
     const draw = () => {
-      const textW = Math.max(20, cols);
-      const bodyRows = Math.max(1, rows - 1);
-      const top = Math.min(
-        Math.max(0, row - Math.floor(bodyRows / 2)),
-        Math.max(0, lines.length - bodyRows),
-      );
-      let out = "\x1b[2J\x1b[H";
-      for (let i = 0; i < bodyRows; i++) {
-        const li = top + i;
-        let text = li < lines.length ? lines[li] : "";
-        text = cut(text, scrollX);
-        const vis = (cut(text, textW) + " ".repeat(textW)).slice(0, textW);
-        const body = li === row ? `${CUR_LINE_BG}${vis}\x1b[0m` : vis;
-        out += body;
-        if (i < bodyRows - 1) out += "\n";
+      try {
+        const textW = Math.max(20, cols);
+        const bodyRows = Math.max(1, rows - 1);
+        const top = Math.min(
+          Math.max(0, row - Math.floor(bodyRows / 2)),
+          Math.max(0, lines.length - bodyRows),
+        );
+        let out = "\x1b[2J\x1b[H";
+        for (let i = 0; i < bodyRows; i++) {
+          const li = top + i;
+          let text = li < lines.length ? lines[li] : "";
+          text = cut(text, scrollX);
+          const vis = (cut(text, textW) + " ".repeat(textW)).slice(0, textW);
+          const body = li === row ? `${CUR_LINE_BG}${vis}\x1b[0m` : vis;
+          out += body;
+          if (i < bodyRows - 1) out += "\n";
+        }
+        const dirty = lines.join("\n") !== original;
+        const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}`;
+        const right = prompt === "discard" ? "" : "ctrl-s save · ctrl-c cancel · ctrl-z undo";
+        const pad = Math.max(1, cols - left.length - right.length);
+        out += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
+        const onRow = Math.min(bodyRows, row - top + 1);
+        const onCol = Math.min(cols, col - scrollX + 1);
+        out += `\x1b[${onRow};${onCol}H`;
+        stdout.write(out);
+      } catch (e) {
+        // draw errors can't be shown — try to save and exit cleanly
+        try { writeFileSync(path, lines.join("\n") ? lines.join("\n") + "\n" : ""); } catch {}
+        done = "save";
+        finish();
       }
-      const dirty = lines.join("\n") !== original;
-      const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}`;
-      const right = prompt === "discard" ? "" : "ctrl-s save · ctrl-c cancel · ctrl-z undo";
-      const pad = Math.max(1, cols - left.length - right.length);
-      out += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
-      const onRow = Math.min(bodyRows, row - top + 1);
-      const onCol = Math.min(cols, col - scrollX + 1);
-      out += `\x1b[${onRow};${onCol}H`;
-      stdout.write(out);
     };
 
     const cleanup = () => {
       stdin.setRawMode(false);
-      stdin.removeListener("data", onData);
+      stdin.removeListener("data", listener);
       process.removeListener("SIGWINCH", onResize);
+      process.removeListener("exit", restoreTerm);
       stdout.write("\x1b[?25h\x1b[0m\x1b[?2004l\x1b[2J\x1b[H");
       resolve();
     };
@@ -191,104 +212,108 @@ export function runEditor(path: string): Promise<void> {
     };
 
     const onData = (chunk: Buffer) => {
-      buf += chunk.toString("utf8");
-      while (buf.length) {
-        if (prompt === "discard") {
-          const k = buf[0];
-          buf = buf.slice(1);
-          if (k === "y" || k === "Y") {
-            done = "cancel";
-            finish();
-            return;
-          }
-          if (k === "n" || k === "N") prompt = null;
-          draw();
-          continue;
-        }
-        const ch = buf[0];
-        if (ch === "\x1b") {
-          const m = buf.match(/^\x1b\[([0-9;]*)([A-Za-z~])/);
-          if (!m) {
-            // Bare ESC or a half-received sequence: wait for more, else ignore.
-            buf = buf.length < 3 ? "" : buf.slice(1);
+      try {
+        buf += chunk.toString("utf8");
+        while (buf.length) {
+          if (prompt === "discard") {
+            const k = buf[0];
+            buf = buf.slice(1);
+            if (k === "y" || k === "Y") {
+              done = "cancel";
+              finish();
+              return;
+            }
+            if (k === "n" || k === "N") prompt = null;
             draw();
             continue;
           }
-          buf = buf.slice(m[0].length);
-          const p = m[1] ? m[1].split(";").map(Number) : [];
-          const f = m[2];
-          if (f === "A") move(-1, 0);
-          else if (f === "B") move(1, 0);
-          else if (f === "C") move(0, 1);
-          else if (f === "D") move(0, -1);
-          else if (f === "H") gotoCol(0);
-          else if (f === "F") gotoCol(lines[row].length);
-          else if (f === "~" && p[0] === 3) del();
-          else if (f === "~" && p[0] === 1) gotoCol(0);
-          else if (f === "~" && p[0] === 4) gotoCol(lines[row].length);
-          else if (f === "~" && p[0] === 5) move(-Math.max(1, rows - 2), 0);
-          else if (f === "~" && p[0] === 6) move(Math.max(1, rows - 2), 0);
-          else if (f === "~" && p[0] === 200) pasting = true;
-          else if (f === "~" && p[0] === 201) pasting = false;
-          // unknown sequences ignored
-          draw();
-          continue;
-        }
-        if (ch === "\r" || ch === "\n") {
-          newline();
-          buf = buf.slice(1);
-          draw();
-          continue;
-        }
-        if (ch === "\x7f") {
-          backspace();
-          buf = buf.slice(1);
-          draw();
-          continue;
-        }
-        if (ch === "\t") {
-          insert("  ");
-          buf = buf.slice(1);
-          draw();
-          continue;
-        }
-        if (ch === "\x13") {
-          buf = buf.slice(1);
-          done = "save";
-          finish();
-          return;
-        }
-        if (ch === "\x03") {
-          buf = buf.slice(1);
-          if (lines.join("\n") !== original) prompt = "discard";
-          else {
-            done = "cancel";
+          const ch = buf[0];
+          if (ch === "\x1b") {
+            const m = buf.match(/^\x1b\[([0-9;]*)([A-Za-z~])/);
+            if (!m) {
+              buf = buf.length < 3 ? "" : buf.slice(1);
+              draw();
+              continue;
+            }
+            buf = buf.slice(m[0].length);
+            const p = m[1] ? m[1].split(";").map(Number) : [];
+            const f = m[2];
+            if (f === "A") move(-1, 0);
+            else if (f === "B") move(1, 0);
+            else if (f === "C") move(0, 1);
+            else if (f === "D") move(0, -1);
+            else if (f === "H") gotoCol(0);
+            else if (f === "F") gotoCol(lines[row].length);
+            else if (f === "~" && p[0] === 3) del();
+            else if (f === "~" && p[0] === 1) gotoCol(0);
+            else if (f === "~" && p[0] === 4) gotoCol(lines[row].length);
+            else if (f === "~" && p[0] === 5) move(-Math.max(1, rows - 2), 0);
+            else if (f === "~" && p[0] === 6) move(Math.max(1, rows - 2), 0);
+            else if (f === "~" && p[0] === 200) pasting = true;
+            else if (f === "~" && p[0] === 201) pasting = false;
+            draw();
+            continue;
+          }
+          if (ch === "\r" || ch === "\n") {
+            newline();
+            buf = buf.slice(1);
+            draw();
+            continue;
+          }
+          if (ch === "\x7f") {
+            backspace();
+            buf = buf.slice(1);
+            draw();
+            continue;
+          }
+          if (ch === "\t") {
+            insert("  ");
+            buf = buf.slice(1);
+            draw();
+            continue;
+          }
+          if (ch === "\x13") {
+            buf = buf.slice(1);
+            done = "save";
             finish();
             return;
           }
+          if (ch === "\x03") {
+            buf = buf.slice(1);
+            if (lines.join("\n") !== original) prompt = "discard";
+            else {
+              done = "cancel";
+              finish();
+              return;
+            }
+            draw();
+            continue;
+          }
+          if (ch === "\x1a") {
+            restore();
+            buf = buf.slice(1);
+            draw();
+            continue;
+          }
+          if (ch === "\x04") {
+            buf = buf.slice(1);
+            continue;
+          }
+          let run = "";
+          while (buf.length) {
+            const c = buf[0];
+            if (c === "\x1b" || "\r\n\x7f\t\x13\x03\x1a\x04".includes(c)) break;
+            run += c;
+            buf = buf.slice(1);
+          }
+          if (run) insert(run);
           draw();
-          continue;
         }
-        if (ch === "\x1a") {
-          restore();
-          buf = buf.slice(1);
-          draw();
-          continue;
-        }
-        if (ch === "\x04") {
-          buf = buf.slice(1); // ctrl-d: no-op
-          continue;
-        }
-        // Printable run (typing or pasted text)
-        let run = "";
-        while (buf.length) {
-          const c = buf[0];
-          if (c === "\x1b" || "\r\n\x7f\t\x13\x03\x1a\x04".includes(c)) break;
-          run += c;
-          buf = buf.slice(1);
-        }
-        if (run) insert(run);
-        draw();
+      } catch (err) {
+        // Never let an exception kill the editor silently — save and exit.
+        done = "save";
+        try { writeFileSync(path, lines.join("\n") ? lines.join("\n") + "\n" : ""); } catch {}
+        finish();
       }
     };
 
@@ -299,12 +324,23 @@ export function runEditor(path: string): Promise<void> {
       rows = stdout.rows || 24;
       draw();
     };
+    const restoreTerm = () => {
+      try { stdout.write("\x1b[?25h\x1b[0m\x1b[?2004l"); } catch {}
+    };
 
     process.on("SIGWINCH", onResize);
+    process.on("exit", restoreTerm);
     stdout.write("\x1b[?25l\x1b[?2004h");
     stdin.setRawMode(true);
     stdin.resume();
-    stdin.on("data", onData);
+    // Discard stale bytes (readline read-ahead, TUI exit leftovers) that arrive
+    // within the first 60 ms — then the editor is live.
+    const t0 = Date.now();
+    const listener = (c: Buffer) => {
+      if (Date.now() - t0 < 60) return;
+      onData(c);
+    };
+    stdin.on("data", listener);
     draw();
   });
 }
