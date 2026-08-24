@@ -22,7 +22,8 @@ bun link          # makes `fanaa` available everywhere
 fanaa                    # asks for a subject, opens the built-in full-screen
                          # editor — no vim, no $EDITOR needed
 fanaa tui                # full-window TUI; `a` composes a letter in the
-                         # built-in in-app editor (same input pipeline)
+                         # built-in in-app editor, `e` edits one (same
+                         # input pipeline as the rest of the TUI)
 fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
 fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter
@@ -35,9 +36,12 @@ fanaa --date 2026-08-23  # backdate (forgot to write last night)
 ```
 
 Fanaa ships its own full-screen editor (insert mode, undo, paste):
-`ctrl-s` saves, `ctrl-c` cancels, `ctrl-z` undoes. Set `FANAA_EDITOR=vim` if
-you insist on an external editor. Every capture writes a fresh letter file —
-nothing is ever merged or appended.
+`ctrl-s` saves, `ctrl-c` cancels, `ctrl-z` undoes, `ctrl+arrows` hop by
+word, `ctrl+backspace`/`ctrl+delete` delete words, `ctrl+up/down` jump to
+the letter's start/end. Set `FANAA_EDITOR=vim` if you insist on an external
+editor. Every capture writes a fresh letter file — nothing is ever merged
+or appended; editing a letter rewrites its body in place and commits an
+`edit: <subject>` revision.
 
 ## Layout
 
