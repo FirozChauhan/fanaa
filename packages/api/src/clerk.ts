@@ -61,19 +61,26 @@ export interface ClerkUser {
 export async function ensureUser(
   email: string,
 ): Promise<{ userId: string; emailAddressId: string }> {
-  // 1. Look up by email
-  const existing = (await clerkFetch(
+  // 1. Look up by email. NOTE: list endpoints return a BARE array, not {data}.
+  const list = (await clerkFetch(
     "GET",
     `/users?email_address=${encodeURIComponent(email)}`,
-  )) as { data: ClerkUser[] };
+  )) as ClerkUser[];
   let user: ClerkUser;
 
-  if (Array.isArray(existing.data) && existing.data.length > 0) {
-    user = existing.data[0];
+  if (Array.isArray(list) && list.length > 0) {
+    user = list[0];
   } else {
-    // 2. Create
+    // 2. Create. Clerk instances commonly require a password — the fanaa
+    // sign-in is email-code only, so we hand Clerk a random throwaway
+    // password and skip both the strength and the requirement checks.
+    const rand = crypto.getRandomValues(new Uint8Array(16));
+    const password = Array.from(rand, (b) => b.toString(16).padStart(2, "0")).join("");
     user = (await clerkFetch("POST", "/users", {
       email_address: [email],
+      password,
+      skip_password_checks: true,
+      skip_password_requirement: true,
     })) as ClerkUser;
   }
 

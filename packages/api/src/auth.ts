@@ -30,8 +30,14 @@ auth.post("/request", async (c) => {
   if (!EMAIL_RE.test(email)) return c.json({ error: "invalid email" }, 400);
 
   if (CLERK_SECRET_KEY) {
-    const { emailAddressId } = await ensureUser(email);
-    const verificationId = await prepareVerification(emailAddressId);
+    let emailAddressId: string;
+    let verificationId: string;
+    try {
+      ({ emailAddressId } = await ensureUser(email));
+      verificationId = await prepareVerification(emailAddressId);
+    } catch (e) {
+      return c.json({ error: `clerk: ${e instanceof Error ? e.message : e}` }, 502);
+    }
     return c.json({ ok: true, channel: "email", verification_id: verificationId });
   }
 
@@ -76,9 +82,14 @@ auth.post("/verify", async (c) => {
   const s = await db();
   if (CLERK_SECRET_KEY) {
     if (!verificationId) return c.json({ error: "verification_id required" }, 400);
-    const { emailAddressId } = await ensureUser(email);
-    const ok = await attemptVerification(emailAddressId, verificationId, code);
-    if (!ok) return c.json({ error: "invalid or expired code" }, 401);
+    let emailAddressId: string;
+    try {
+      ({ emailAddressId } = await ensureUser(email));
+      const ok = await attemptVerification(emailAddressId, verificationId, code);
+      if (!ok) return c.json({ error: "invalid or expired code" }, 401);
+    } catch (e) {
+      return c.json({ error: "invalid or expired code" }, 401);
+    }
   } else {
     const rows = (await s`SELECT code FROM auth_codes WHERE email = ${email} AND expires_at > now()`) as { code: string }[];
     if (rows.length === 0 || rows[0].code !== code) {
