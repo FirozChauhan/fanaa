@@ -481,10 +481,12 @@ export function App() {
   }
 
   if (view === "sync") {
-    // Full-screen cloud panel: status, sign in, sync now, sign out.
+    // Cloud panel overlay — centered, like the help menu.
     return (
-      <Box flexDirection="column" height={rows} paddingX={2} paddingTop={2}>
+      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
         <SyncPanel
+          cols={cols}
+          rows={rows}
           storeRoot={STORE}
           journalRoot={JOURNAL}
           category={CATEGORY}

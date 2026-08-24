@@ -30,10 +30,34 @@ type NameCtx = "signup" | "edit";
 
 const GLYPH = "\u26a1"; // ⚡ cloud-with-flash, printed in the title
 
+/**
+ * Bordered, centered shell — the sync menu shares the help menu's look
+ * (round accent border) so it reads as an overlay, not a page.
+ */
+function PanelBox({ cols, rows, children }: { cols: number; rows: number; children: React.ReactNode }) {
+  const w = Math.min(56, cols - 4);
+  const h = Math.min(16, rows - 4);
+  return (
+    <Box
+      width={w}
+      height={h}
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={ACCENT}
+      paddingX={2}
+      paddingTop={1}
+    >
+      {children}
+    </Box>
+  );
+}
+
 export function SyncPanel({
   storeRoot,
   journalRoot,
   category,
+  cols,
+  rows,
   onClose,
   onSynced,
   onStateChange,
@@ -41,6 +65,8 @@ export function SyncPanel({
   storeRoot: string;
   journalRoot: string;
   category: string;
+  cols: number;
+  rows: number;
   onClose: () => void;
   /** Fired after a sync round finishes writing letters (lets the app reload). */
   onSynced: () => void;
@@ -224,7 +250,7 @@ export function SyncPanel({
   // ----- text-input phases (login) -----
   if (phase === "email") {
     return (
-      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+      <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
           {GLYPH} SIGN IN
         </Text>
@@ -252,13 +278,13 @@ export function SyncPanel({
             {"\u2717"} {error}
           </Text>
         )}
-      </Box>
+      </PanelBox>
     );
   }
 
   if (phase === "code") {
     return (
-      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+      <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
           {GLYPH} SIGN IN
         </Text>
@@ -286,13 +312,13 @@ export function SyncPanel({
             {"\u2717"} {error}
           </Text>
         )}
-      </Box>
+      </PanelBox>
     );
   }
 
   if (phase === "name") {
     return (
-      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+      <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
           {GLYPH} YOUR NAME
         </Text>
@@ -318,13 +344,13 @@ export function SyncPanel({
             {"\u2717"} {error}
           </Text>
         )}
-      </Box>
+      </PanelBox>
     );
   }
 
   // ----- status + actions -----
   return (
-    <Box flexDirection="column" paddingX={4} paddingTop={2}>
+    <PanelBox cols={cols} rows={rows}>
       <Text bold color={GOLD}>
         {GLYPH} CLOUD SYNC
       </Text>
@@ -380,6 +406,6 @@ export function SyncPanel({
           <Text color={FAINT}>esc / q — back to the journal</Text>
         </Box>
       </Box>
-    </Box>
+    </PanelBox>
   );
 }
