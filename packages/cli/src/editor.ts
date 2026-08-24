@@ -12,11 +12,11 @@ import { stdin, stdout } from "node:process";
  *   ctrl-z  undo (100 steps)
  *   paste   works via bracketed-paste mode
  *
- * Set FANAA_EDITOR (or EDITOR/VISUAL) to keep using an external editor:
+ * Set FANAA_EDITOR to keep using an external editor:
  *   FANAA_EDITOR=vim fanaa
  */
 
-const GUTTER = 4; // "NNN " line-number gutter
+const CUR_LINE_BG = "\x1b[48;5;236m"; // warm dark grey — subtle, not bright
 const UNDO_MAX = 100;
 
 /** Trim n without splitting a surrogate pair (emoji-safe). */
@@ -30,7 +30,7 @@ function cut(s: string, n: number): string {
 }
 
 function runExternal(file: string): void {
-  const editor = process.env.FANAA_EDITOR || process.env.EDITOR || process.env.VISUAL;
+  const editor = process.env.FANAA_EDITOR;
   if (!editor) return;
   const res = spawnSync(editor, [file], { stdio: "inherit" });
   if (res.error) {
@@ -39,8 +39,9 @@ function runExternal(file: string): void {
 }
 
 export function runEditor(path: string): Promise<void> {
-  // Explicit external editor? Hand off (kept for git-style workflows).
-  if (process.env.FANAA_EDITOR || process.env.EDITOR || process.env.VISUAL) {
+  // Only FANAA_EDITOR opts out of the built-in editor — EDITOR/VISUAL never
+  // hijack fanaa (vim stays out of this app).
+  if (process.env.FANAA_EDITOR) {
     return Promise.resolve().then(() => runExternal(path));
   }
   // No terminal to edit in — nothing to do (caller reads the untouched file).
@@ -79,7 +80,7 @@ export function runEditor(path: string): Promise<void> {
       if (col > max) col = max;
     };
     const adjustScroll = () => {
-      const textW = Math.max(20, cols - GUTTER);
+      const textW = Math.max(20, cols);
       if (col - scrollX >= textW) scrollX = col - textW + 1;
       if (col < scrollX) scrollX = col;
     };
@@ -147,7 +148,7 @@ export function runEditor(path: string): Promise<void> {
     };
 
     const draw = () => {
-      const textW = Math.max(20, cols - GUTTER);
+      const textW = Math.max(20, cols);
       const bodyRows = Math.max(1, rows - 1);
       const top = Math.min(
         Math.max(0, row - Math.floor(bodyRows / 2)),
@@ -159,25 +160,17 @@ export function runEditor(path: string): Promise<void> {
         let text = li < lines.length ? lines[li] : "";
         text = cut(text, scrollX);
         const vis = (cut(text, textW) + " ".repeat(textW)).slice(0, textW);
-        const num = String(li + 1).padStart(3, " ");
-        const gutter =
-          li === row ? `\x1b[38;5;214m${num}\x1b[0m ` : `\x1b[90m${num}\x1b[0m `;
-        const body = li === row ? `\x1b[7m${vis}\x1b[0m` : vis;
-        out += gutter + body;
+        const body = li === row ? `${CUR_LINE_BG}${vis}\x1b[0m` : vis;
+        out += body;
         if (i < bodyRows - 1) out += "\n";
       }
       const dirty = lines.join("\n") !== original;
-      const left =
-        prompt === "discard"
-          ? "discard changes? y/n"
-          : ` fanaa · ${lines.length} line${lines.length === 1 ? "" : "s"}${
-              dirty ? " · unsaved" : ""
-            }`;
+      const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}`;
       const right = prompt === "discard" ? "" : "ctrl-s save · ctrl-c cancel · ctrl-z undo";
       const pad = Math.max(1, cols - left.length - right.length);
       out += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
       const onRow = Math.min(bodyRows, row - top + 1);
-      const onCol = Math.min(cols, col - scrollX + GUTTER + 1);
+      const onCol = Math.min(cols, col - scrollX + 1);
       out += `\x1b[${onRow};${onCol}H`;
       stdout.write(out);
     };
