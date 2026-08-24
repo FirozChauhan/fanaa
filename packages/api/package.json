@@ -1,6 +1,6 @@
 {
   "name": "fanaa-api",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "type": "module",
   "private": true,
   "description": "Fanaa v0.2 API — email OTP auth + letter sync (Hono on Neon/Postgres)",

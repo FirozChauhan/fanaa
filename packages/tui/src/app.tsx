@@ -103,6 +103,18 @@ function Title() {
 }
 
 /**
+ * Big boot logo — figlet `banner` font with # → █ (full blocks), 7 rows.
+ * Rendered with a left→right AMBER→GOLD gradient across the whole block.
+ */
+const SPLASH_LOGO = `███████    █    █     █    █       █    
+█         █ █   ██    █   █ █     █ █   
+█        █   █  █ █   █  █   █   █   █  
+█████   █     █ █  █  █ █     █ █     █ 
+█       ███████ █   █ █ ███████ ███████ 
+█       █     █ █    ██ █     █ █     █ 
+█       █     █ █     █ █     █ █     █ `;
+
+/**
  * Boot splash: the word FANAA centered on screen. Any key (or ~1.1s)
  * advances into the app; the CLI wrapper skips it when relaunching after
  * the vim handoff (FANAA_NO_SPLASH) so the write loop stays snappy.
@@ -113,7 +125,8 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
     const t = setTimeout(onDone, 1100);
     return () => clearTimeout(t);
   }, [onDone]);
-  const colors = gradientColors(TITLE, AMBER, GOLD);
+  const colors = gradientColors(SPLASH_LOGO.replace(/\n/g, ""), AMBER, GOLD);
+  let ci = 0;
   return (
     <Box
       width="100%"
@@ -122,13 +135,20 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
       alignItems="center"
       justifyContent="center"
     >
-      <Text bold>
-        {[...TITLE].map((c, i) => (
-          <Text key={i} color={colors[i]}>
-            {c}
+      <Box flexDirection="column" alignItems="center">
+        {SPLASH_LOGO.split("\n").map((ln, i) => (
+          <Text key={i} bold>
+            {[...ln].map((c, j) => {
+              const col = colors[ci++];
+              return (
+                <Text key={j} color={c === " " ? undefined : col}>
+                  {c}
+                </Text>
+              );
+            })}
           </Text>
         ))}
-      </Text>
+      </Box>
       <Box marginTop={1}>
         <Text color={FAINT}>letters only you will ever read</Text>
       </Box>
