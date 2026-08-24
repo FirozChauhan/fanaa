@@ -107,11 +107,11 @@ function Title() {
  * vertical strokes); only the N carries a diagonal staircase. Rendered
  * with a left→right AMBER→GOLD gradient across the whole block.
  */
-const SPLASH_LOGO = `█████ █████ █   █ █████ █████
-█     █   █ ██  █ █   █ █   █
-█████ █████ █ █ █ █████ █████
-█     █   █ █  ██ █   █ █   █
-█     █   █ █   █ █   █ █   █`;
+const SPLASH_LOGO = `███████ ███████ ██   ██ ███████ ███████
+██      ██   ██ ███  ██ ██   ██ ██   ██
+███████ ███████ ██ █ ██ ███████ ███████
+██      ██   ██ ██  ███ ██   ██ ██   ██
+██      ██   ██ ██   ██ ██   ██ ██   ██`;
 
 /**
  * Boot splash: the word FANAA centered on screen. Any key (or ~1.1s)
