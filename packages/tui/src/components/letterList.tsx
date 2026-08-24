@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Text } from "ink";
 import type { Letter } from "../data";
 import { GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
@@ -17,7 +17,7 @@ function cap(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
-export function LetterList({
+export const LetterList = memo(function LetterList({
   letters,
   selected,
   width,
@@ -55,4 +55,4 @@ export function LetterList({
       })}
     </>
   );
-}
+});

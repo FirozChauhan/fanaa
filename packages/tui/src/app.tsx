@@ -82,10 +82,15 @@ function buildTree(lst: Letter[], col: Set<string>) {
   return { rows, map };
 }
 
+const titleGradCache = new Map<string, string[]>();
 function Title() {
   // Show the journal category next to the logo when it's not the default.
   const title = CATEGORY === "fanaa" ? TITLE : `${TITLE} \u00b7 ${CATEGORY}`;
-  const colors = gradientColors(title, AMBER, GOLD);
+  let colors = titleGradCache.get(title);
+  if (!colors) {
+    colors = gradientColors(title, AMBER, GOLD);
+    titleGradCache.set(title, colors);
+  }
   return (
     <Text bold>
       {[...title].map((c, i) => (
@@ -94,6 +99,43 @@ function Title() {
         </Text>
       ))}
     </Text>
+  );
+}
+
+/**
+ * Boot splash: the word FANAA centered on screen. Any key (or ~1.1s)
+ * advances into the app; the CLI wrapper skips it when relaunching after
+ * the vim handoff (FANAA_NO_SPLASH) so the write loop stays snappy.
+ */
+function Splash({ onDone }: { onDone: () => void }) {
+  useInput(() => onDone());
+  useEffect(() => {
+    const t = setTimeout(onDone, 1100);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  const colors = gradientColors(TITLE, AMBER, GOLD);
+  return (
+    <Box
+      width="100%"
+      height="100%"
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+    >
+      <Text bold>
+        {[...TITLE].map((c, i) => (
+          <Text key={i} color={colors[i]}>
+            {c}
+          </Text>
+        ))}
+      </Text>
+      <Box marginTop={1}>
+        <Text color={FAINT}>letters only you will ever read</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color={DIVIDER}>{VERSION}</Text>
+      </Box>
+    </Box>
   );
 }
 
@@ -208,6 +250,9 @@ export function App() {
   const [letters, setLetters] = useState<Letter[]>(() => loadLetters(JOURNAL));
   const [idx, setIdx] = useState(0);
   const [view, setView] = useState<View>("browse");
+  // Boot splash — shown on a cold start, skipped on relaunch after the vim
+  // handoff (the CLI wrapper sets FANAA_NO_SPLASH for those respawns).
+  const [splash, setSplash] = useState(() => !process.env.FANAA_NO_SPLASH);
   const [helpReturn, setHelpReturn] = useState<View>("browse");
   const [letterFull, setLetterFull] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -291,6 +336,7 @@ export function App() {
   };
 
   useInput((input, key) => {
+    if (splash) return; // Splash owns the input until it advances
     if (view === "sync") return; // SyncPanel owns its keys (and ctrl+c)
     if (view === "compose") {
       if (key.escape) setView("browse");
@@ -488,6 +534,10 @@ export function App() {
   // overhead); beyond that you may scroll, never further than the last line.
   const maxOffset = Math.max(0, bodyLines.length - (listH - 5));
 
+  if (splash) {
+    return <Splash onDone={() => setSplash(false)} />;
+  }
+
   if (view === "help") {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
@@ -563,6 +613,9 @@ export function App() {
   const selInList = selRow - listTop;
   const hasAbove = listTop > 0;
   const hasBelow = listLen > listTop + listH;
+  // Stable viewport slice so the memoized LetterList skips re-rendering on
+  // unrelated keystrokes (it only redraws when the window actually moves).
+  const viewport = useMemo(() => filtered.slice(listTop, listTop + listH), [filtered, listTop, listH]);
 
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
@@ -619,7 +672,7 @@ export function App() {
                   />
                 ) : (
                   <LetterList
-                    letters={filtered.slice(listTop, listTop + listH)}
+                    letters={viewport}
                     selected={selInList}
                     width={listW - 1}
                     height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}

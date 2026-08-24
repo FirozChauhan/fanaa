@@ -145,7 +145,7 @@ export function wrapBodyCached(key: string, body: string, width: number): Inline
   const ck = `${key}|${width}|${body.length}`;
   let v = wrapCache.get(ck);
   if (!v) {
-    if (wrapCache.size > 128) wrapCache.clear();
+    if (wrapCache.size > 512) wrapCache.clear();
     v = wrapBody(body, width);
     wrapCache.set(ck, v);
   }

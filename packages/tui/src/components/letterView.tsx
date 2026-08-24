@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
@@ -10,7 +10,7 @@ import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, wrapBodyC
  * `offset`). Serves both the browse-mode preview pane and the focused letter
  * view (which passes a highlightSubject flag and its own offset).
  */
-export function LetterView({
+export const LetterView = memo(function LetterView({
   letter,
   width,
   height,
@@ -77,4 +77,4 @@ export function LetterView({
       )}
     </Box>
   );
-}
+});

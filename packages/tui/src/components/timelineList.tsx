@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Text } from "ink";
 import type { Letter } from "../data";
 import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
@@ -51,7 +51,7 @@ function nextMonthOrYear(rows: TreeRow[], i: number): TreeRow | undefined {
  * `start`/`height` pick the visible window, `selAbs` is the absolute row of the
  * selected letter.
  */
-export function TimelineList({
+export const TimelineList = memo(function TimelineList({
   rows,
   start,
   selAbs,
@@ -116,4 +116,4 @@ export function TimelineList({
       })}
     </>
   );
-}
+});

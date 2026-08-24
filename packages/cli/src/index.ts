@@ -312,10 +312,13 @@ async function main(): Promise<void> {
     const cat = activeCategory();
     const root = journalStore(cat);
     const pending = join(store, ".tui-pending");
+    // First spawn shows the boot splash; relaunches after the editor handoff
+    // skip it so the write loop stays snappy.
+    let relaunch = false;
     while (true) {
       const res = spawnSync("bun", ["run", tuiEntry], {
         stdio: "inherit",
-        env: { ...process.env, FANAA_CATEGORY: cat },
+        env: { ...process.env, FANAA_CATEGORY: cat, FANAA_NO_SPLASH: relaunch ? "1" : "0" },
       });
       if (res.status === 66) {
         // The TUI hands the letter off to vim (git-commit style): it writes
@@ -351,10 +354,14 @@ async function main(): Promise<void> {
           const body = readFileSync(tmp, "utf8");
           await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false, category: cat });
         }
+        relaunch = true;
         continue;
       }
       if (res.status === 0) break; // normal quit
-      if (res.status === 130) continue; // ctrl+c in editor → back to TUI
+      if (res.status === 130) {
+        relaunch = true;
+        continue; // ctrl+c in editor → back to TUI
+      }
       break; // unexpected error
     }
     return;
