@@ -220,7 +220,7 @@ export function App() {
   const listW = Math.min(42, Math.floor(cols * 0.38));
   const showPreview = inLetter || cols >= 62;
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
-  const listH = Math.max(3, rows - (inLetter ? 5 : 4));
+  const listH = Math.max(3, rows - 4);
   const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
   const visible = letters.slice(listTop, listTop + listH);
   const selInList = idx - listTop;
@@ -297,14 +297,6 @@ export function App() {
       </Box>
 
       {/* footer */}
-      {inLetter && (
-        <Text color={FAINT}>
-          {" "}j/k scroll ·{" "}
-          <Text color={MUTED}>f</Text> {letterFull ? "split" : "fullscreen"} ·{" "}
-          <Text color={MUTED}>e</Text> edit · <Text color={MUTED}>d</Text> del ·{" "}
-          <Text color={MUTED}>esc</Text> back
-        </Text>
-      )}
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
         <Text color={MUTED}>{VERSION}</Text>
