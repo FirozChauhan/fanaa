@@ -291,11 +291,11 @@ export function App() {
 
       {/* footer */}
       <Box paddingX={1}>
+        <Text color={MUTED}>v{VERSION}</Text>
+        <Text color={FAINT}> · </Text>
         <Text color={FAINT}>
           <Text color={MUTED}>H</Text>: Help
         </Text>
-        <Box flexGrow={1} />
-        <Text color={MUTED}>v{VERSION}</Text>
       </Box>
     </Box>
   );
