@@ -28,7 +28,9 @@ import { ACCENT, FAINT, GOLD, MUTED, PAPER } from "../util";
 type Phase = "idle" | "busy" | "email" | "code" | "name";
 type NameCtx = "signup" | "edit";
 
-const GLYPH = "\u26a1"; // ⚡ cloud-with-flash, printed in the title
+// NOTE: keep panel titles free of ambiguous-width glyphs (⚡ etc.) — they
+// render 2 cells in modern terminals while Ink counts 1, breaking the box
+// border's right edge by a column or two.
 
 /**
  * Bordered, centered shell — the sync menu shares the help menu's look
@@ -252,7 +254,7 @@ export function SyncPanel({
     return (
       <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
-          {GLYPH} SIGN IN
+          SIGN IN
         </Text>
         <Box marginTop={1}>
           <Text bold color={ACCENT}>
@@ -286,7 +288,7 @@ export function SyncPanel({
     return (
       <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
-          {GLYPH} SIGN IN
+          SIGN IN
         </Text>
         <Text color={MUTED}>{message}</Text>
         <Box marginTop={1}>
@@ -320,7 +322,7 @@ export function SyncPanel({
     return (
       <PanelBox cols={cols} rows={rows}>
         <Text bold color={GOLD}>
-          {GLYPH} YOUR NAME
+          YOUR NAME
         </Text>
         <Text color={MUTED}>
           {nameCtx === "signup" ? "what should the TUI header call you?" : "edit your full name"}
@@ -352,7 +354,7 @@ export function SyncPanel({
   return (
     <PanelBox cols={cols} rows={rows}>
       <Text bold color={GOLD}>
-        {GLYPH} CLOUD SYNC
+        CLOUD SYNC
       </Text>
       <Box flexDirection="column" marginTop={1}>
         <Text>
