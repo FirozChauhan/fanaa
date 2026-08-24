@@ -8,6 +8,7 @@ import { loadLetters, dayCounts, computeStreak, sortLetters, type Letter, type S
 import { LetterList } from "./components/letterList";
 import { TimelineList, type TreeRow } from "./components/timelineList";
 import { LetterView } from "./components/letterView";
+import { SyncPanel } from "./components/syncPanel";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
@@ -34,7 +35,7 @@ const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
 const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
 
-type View = "browse" | "letter" | "compose" | "help";
+type View = "browse" | "letter" | "compose" | "help" | "sync";
 
 const TITLE = "FANAA";
 const VERSION = JSON.parse(
@@ -119,6 +120,7 @@ function HelpOverlay({
     ["e", "edit letter"],
     ["d", "delete letter"],
     ["r", "refresh"],
+    ["p", "cloud sync (login / sync / logout)"],
     ["h / ?", "help"],
     ["q", "quit"],
     ["f", "fullscreen (letter)"],
@@ -249,6 +251,7 @@ export function App() {
   };
 
   useInput((input, key) => {
+    if (view === "sync") return; // SyncPanel owns its keys (and ctrl+c)
     if (view === "compose") {
       if (key.escape) setView("browse");
       else if (key.ctrl && input === "c") process.exit(0);
@@ -272,6 +275,7 @@ export function App() {
         setOffset(Math.min(hlLines[next], maxOffset));
       } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
       else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
+      else if (input === "p") setView("sync");
       else if (input === "h" || input === "?") {
         setHelpReturn("letter");
         setView("help");
@@ -352,6 +356,7 @@ export function App() {
         setView("compose");
       } else if (input === "e" && rowLetter) handOff(`EDIT:${rowLetter.key}`);
       else if (input === "d" && rowLetter) handOff(`DELETE:${rowLetter.key}`);
+      else if (input === "p") setView("sync");
       else if (input === "h" || input === "?") {
         setHelpReturn("browse");
         setView("help");
@@ -401,6 +406,7 @@ export function App() {
       setView("compose");
     } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
     else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
+    else if (input === "p") setView("sync");
     else if (input === "h" || input === "?") {
       setHelpReturn("browse");
       setView("help");
@@ -471,6 +477,24 @@ export function App() {
     );
   }
 
+  if (view === "sync") {
+    // Full-screen cloud panel: status, sign in, sync now, sign out.
+    return (
+      <Box flexDirection="column" height={rows} paddingX={2} paddingTop={2}>
+        <SyncPanel
+          storeRoot={STORE}
+          journalRoot={JOURNAL}
+          category={CATEGORY}
+          onClose={() => setView("browse")}
+          onSynced={() => {
+            setLetters(loadLetters(JOURNAL));
+            setIdx(0);
+          }}
+        />
+      </Box>
+    );
+  }
+
   if (view === "letter") {
     // letter shares the split layout below; fullscreen is a pane-level toggle
   } else if (letters.length === 0) {
@@ -481,6 +505,7 @@ export function App() {
           <Text color={MUTED}>no letters yet</Text>
         </Box>
         <Text color={FAINT}>press a to write your first one</Text>
+        <Text color={FAINT}>press p to sync from the cloud</Text>
       </Box>
     );
   }
@@ -613,6 +638,10 @@ export function App() {
         <Text color={FAINT}> · </Text>
         <Text color={FAINT}>
           <Text color={MUTED}>H</Text>: Help
+        </Text>
+        <Text color={FAINT}> · </Text>
+        <Text color={FAINT}>
+          <Text color={MUTED}>P</Text>: sync
         </Text>
         {q && !searching && view === "browse" && (
           <>

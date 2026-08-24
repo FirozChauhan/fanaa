@@ -1,0 +1,285 @@
+import React, { useCallback, useState } from "react";
+import { Box, Text, useInput } from "ink";
+import TextInput from "ink-text-input";
+import {
+  FanaaApiError,
+  loadSyncState,
+  requestCode,
+  resolveApiUrl,
+  runSync,
+  saveSyncState,
+  verifyCode,
+} from "fanaa-sync";
+import { ACCENT, FAINT, GOLD, MUTED, PAPER } from "../util";
+
+/**
+ * The cloud-sync panel — sign in / sign out / sync now, all inside the TUI.
+ *
+ * Backed by the fanaa-sync engine, the same session file (~/.fanaa/state/
+ * sync.json) the CLI uses, so `fanaa login`/`fanaa sync` and the TUI agree
+ * on one account and one sync cursor.
+ *
+ * Interaction is deliberately minimal: one key per action, plain text-input
+ * for the email and the 6-digit code, and a single status line for what just
+ * happened. `esc` always takes you back to the journal.
+ */
+
+type Phase = "idle" | "busy" | "email" | "code";
+
+const GLYPH = "\u26a1"; // ⚡ cloud-with-flash, printed in the title
+
+export function SyncPanel({
+  storeRoot,
+  journalRoot,
+  category,
+  onClose,
+  onSynced,
+}: {
+  storeRoot: string;
+  journalRoot: string;
+  category: string;
+  onClose: () => void;
+  /** Fired after a sync round finishes writing letters (lets the app reload). */
+  onSynced: () => void;
+}) {
+  const [state, setState] = useState(() => loadSyncState(storeRoot));
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [verificationId, setVerificationId] = useState<string | undefined>(undefined);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const apiUrl = resolveApiUrl(state);
+  const signedIn = state.token !== "";
+  const j = state.journals[category];
+
+  const refresh = useCallback(
+    (next: typeof state) => {
+      saveSyncState(storeRoot, next);
+      setState(next);
+    },
+    [storeRoot],
+  );
+
+  /** Fire a full sync round; updates the panel's status + reloads letters. */
+  const doSync = useCallback(async () => {
+    setPhase("busy");
+    setError(null);
+    setMessage("syncing\u2026");
+    try {
+      const s = loadSyncState(storeRoot);
+      const summary = await runSync(storeRoot, journalRoot, s, category);
+      refresh(s);
+      onSynced();
+      const parts = [
+        summary.pushed > 0 ? `${summary.pushed} pushed (${summary.accepted} accepted)` : null,
+        summary.pulled > 0 ? `${summary.pulled} pulled` : null,
+        summary.tombstoned > 0 ? `${summary.tombstoned} removed` : null,
+      ].filter(Boolean);
+      setMessage(
+        summary.pushed === 0 && summary.pulled === 0 && summary.tombstoned === 0
+          ? "up to date \u2014 nothing to push, nothing new"
+          : `\u2713 sync done: ${parts.join(" \u00b7 ")}`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setMessage(null);
+    }
+    setPhase("idle");
+  }, [storeRoot, journalRoot, category, refresh, onSynced]);
+
+  /** Sign-in: request a code for the given email (Clerk emails it). */
+  const startLogin = useCallback(async (addr: string) => {
+    setPhase("busy");
+    setError(null);
+    setMessage("requesting code\u2026");
+    try {
+      const req = await requestCode(apiUrl, addr);
+      setVerificationId(req.verification_id);
+      setMessage(
+        req.channel === "dev"
+          ? "(dev server \u2014 the code is printed on the server console)"
+          : `code sent to ${addr} \u2014 check your inbox`,
+      );
+      setPhase("code");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setMessage(null);
+      setPhase("idle");
+    }
+  }, [apiUrl]);
+
+  /** Verify the code, persist the session, then sync immediately. */
+  const finishLogin = useCallback(async (addr: string, verificationId: string | undefined, c: string) => {
+    setPhase("busy");
+    setError(null);
+    setMessage("verifying\u2026");
+    try {
+      const { token } = await verifyCode(apiUrl, addr, c, verificationId);
+      const next = loadSyncState(storeRoot);
+      next.apiUrl = apiUrl;
+      next.email = addr;
+      next.token = token;
+      refresh(next);
+      setMessage(`\u2713 signed in as ${addr}`);
+      await doSync();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setMessage(null);
+      setPhase("idle");
+    }
+  }, [apiUrl, storeRoot, refresh, doSync]);
+
+  /** Sign out: drop the token (progress/cursor stay for next login). */
+  const doLogout = useCallback(() => {
+    const next = loadSyncState(storeRoot);
+    next.token = "";
+    next.email = "";
+    refresh(next);
+    setMessage("signed out \u2014 local letters are untouched");
+    setPhase("idle");
+  }, [storeRoot, refresh]);
+
+  useInput((input, key) => {
+    if (phase === "email" || phase === "code") return; // TextInput owns these keys
+    if (phase === "busy") return; // a sync/login is in flight
+    if (key.ctrl && input === "c") process.exit(0);
+    if (key.escape || input === "q") {
+      onClose();
+    } else if (!signedIn && (input === "l" || key.return)) {
+      setEmail("");
+      setCode("");
+      setVerificationId(undefined);
+      setError(null);
+      setMessage("sign in \u2014 email address for the code");
+      setPhase("email");
+    } else if (signedIn && (input === "p" || key.return)) {
+      void doSync();
+    } else if (signedIn && input === "o") {
+      doLogout();
+    }
+  });
+
+  // ----- text-input phases (login) -----
+  if (phase === "email") {
+    return (
+      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+        <Text bold color={GOLD}>
+          {GLYPH} SIGN IN
+        </Text>
+        <Box marginTop={1}>
+          <Text bold color={ACCENT}>
+            {"\u276f"} {" "}
+          </Text>
+          <TextInput
+            value={email}
+            onChange={setEmail}
+            onSubmit={(v) => {
+              const addr = v.trim().toLowerCase();
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+                setError("invalid email");
+                return;
+              }
+              void startLogin(addr);
+            }}
+            placeholder="you@example.com"
+          />
+        </Box>
+        <Text color={FAINT}>enter = request 6-digit code · esc = cancel</Text>
+        {error && (
+          <Text color="#e07a5f">
+            {"\u2717"} {error}
+          </Text>
+        )}
+      </Box>
+    );
+  }
+
+  if (phase === "code") {
+    return (
+      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+        <Text bold color={GOLD}>
+          {GLYPH} SIGN IN
+        </Text>
+        <Text color={MUTED}>{message}</Text>
+        <Box marginTop={1}>
+          <Text bold color={ACCENT}>
+            {"\u276f"} {" "}
+          </Text>
+          <TextInput
+            value={code}
+            onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
+            onSubmit={(v) => {
+              if (!/^\d{6}$/.test(v)) {
+                setError("code is 6 digits");
+                return;
+              }
+              void finishLogin(email, verificationId, v);
+            }}
+            placeholder="000000"
+          />
+        </Box>
+        <Text color={FAINT}>enter = verify · esc = cancel</Text>
+        {error && (
+          <Text color="#e07a5f">
+            {"\u2717"} {error}
+          </Text>
+        )}
+      </Box>
+    );
+  }
+
+  // ----- status + actions -----
+  return (
+    <Box flexDirection="column" paddingX={4} paddingTop={2}>
+      <Text bold color={GOLD}>
+        {GLYPH} CLOUD SYNC
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        <Text>
+          <Text color={MUTED}>status </Text>
+          <Text color={signedIn ? ACCENT : PAPER}>
+            {signedIn ? `signed in as ${state.email}` : "not signed in"}
+          </Text>
+        </Text>
+        <Text>
+          <Text color={MUTED}>api    </Text>
+          <Text color={PAPER}>{apiUrl}</Text>
+        </Text>
+        <Text>
+          <Text color={MUTED}>journal</Text>
+          <Text color={PAPER}> {category}</Text>
+          {j?.cursor ? <Text color={FAINT}> · synced (cursor {j.cursor.slice(0, 10)}…)</Text> : null}
+        </Text>
+      </Box>
+      {(message || error) && (
+        <Box marginTop={1}>
+          <Text color={error ? "#e07a5f" : ACCENT}>{error ? `\u2717 ${error}` : message}</Text>
+        </Box>
+      )}
+      <Box flexDirection="column" marginTop={1}>
+        {signedIn ? (
+          <>
+            <Text>
+              <Text bold color={ACCENT}>p</Text>
+              <Text color={MUTED}>  sync now</Text>
+            </Text>
+            <Text>
+              <Text bold color={ACCENT}>o</Text>
+              <Text color={MUTED}>  sign out</Text>
+            </Text>
+          </>
+        ) : (
+          <Text>
+            <Text bold color={ACCENT}>l</Text>
+            <Text color={MUTED}>  sign in</Text>
+          </Text>
+        )}
+        <Box marginTop={1}>
+          <Text color={FAINT}>esc / q — back to the journal</Text>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
