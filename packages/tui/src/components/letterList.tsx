@@ -4,10 +4,10 @@ import { dayKey, parseDayKey } from "fanaa-core";
 import type { Letter } from "../data";
 import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
 
-/** "today 1930" / "yest 1930" / "sat 1930" / "08-24 1930" — time shown when the day has several letters. */
-function dayLabel(base: string, time: string, multi: boolean): string {
+/** "today 1930" / "yest 1930" / "sat 1930" / "08-24 1930" — ID shown when the day has several letters. */
+function dayLabel(base: string, id: string, multi: boolean): string {
   const today = dayKey(new Date());
-  const suffix = multi && time ? ` ${time}` : "";
+  const suffix = multi && id ? ` ${id}` : "";
   if (base === today) return `today${suffix}`;
   const y = new Date(Date.now() - 86400000);
   if (base === dayKey(y)) return `yest${suffix}`;
@@ -45,9 +45,10 @@ export function LetterList({
       {rows.map((l, i) => {
         const sel = i === selected;
         const base = l.key.slice(0, 10);
-        const time = l.key.length > 10 ? l.key.slice(11, 15) : "";
+        // Unique entry ID = HHMM timestamp + 6-char hash ("1214K7X2P9").
+        const id = l.key.slice(11, 15) + l.key.slice(16);
         const multi = rows.filter((r) => r.key.slice(0, 10) === base).length > 1;
-        const label = cap(dayLabel(base, time, multi));
+        const label = cap(dayLabel(base, id, multi));
         const subject = cap(truncate(l.meta.subject || "(no subject)", Math.max(4, subjW - label.length)));
         return (
           <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, basename, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
-import { dayKey, entryPath, journalRoot, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
+import { dayKey, entryIdFromKey, entryPath, journalRoot, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
 import { composeLines } from "./editor";
 import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
 import { commitEntry, gitEmail } from "./git";
@@ -140,6 +140,7 @@ async function cmdWrite(opts: {
 
   const meta: EntryMeta = {
     date: stampFor(key),
+    id: entryIdFromKey(key),
     from,
     to,
     subject,

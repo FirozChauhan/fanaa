@@ -49,9 +49,31 @@ export function entryPath(root: string, key: string): string {
   return join(root, "entries", y, m, `${key}.md`);
 }
 
-/** Key for a new letter file: YYYY-MM-DD-HHMM — one letter, one file. */
+/** Key for a new letter file: YYYY-MM-DD-HHMM-XXXXXX — one letter, one file. */
 export function stampKey(base: string, d: Date): string {
-  return `${base}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `${base}-${pad(d.getHours())}${pad(d.getMinutes())}-${uniqueHash()}`;
+}
+
+let hashCounter = 0;
+
+/** 6-character unique hash (base36, uppercase) derived from the clock + a counter. */
+export function uniqueHash(): string {
+  const n = Date.now() * 1000 + (hashCounter++ % 1000);
+  // FNV-1a over the decimal digits, then base36 → 6 chars.
+  let h = 2166136261;
+  for (const c of String(n)) {
+    h ^= c.charCodeAt(0);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36).padStart(6, "0").slice(-6).toUpperCase();
+}
+
+/**
+ * The entry's unique ID: the HHMM timestamp concatenated with the 6-char
+ * hash (e.g. "1214K7X2P9"). Old pre-hash keys just yield the HHMM part.
+ */
+export function entryIdFromKey(key: string): string {
+  return key.slice(11, 15) + key.slice(16);
 }
 
 /** Parse a user-supplied date string into a key (day or exact letter). */
@@ -61,6 +83,7 @@ export function parseDateArg(s: string): string | null {
   if (s === "yesterday") return dayKey(new Date(now.getTime() - 86400000));
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (/^\d{2}-\d{2}$/.test(s)) return `${now.getFullYear()}-${s}`;
-  if (/^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(s)) return s; // exact letter key
+  // Exact letter key: YYYY-MM-DD-HHMM with optional uniqueness suffix (-2, -K7X2P9).
+  if (/^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)?$/.test(s)) return s;
   return null;
 }

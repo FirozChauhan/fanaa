@@ -1,5 +1,6 @@
 export interface EntryMeta {
   date?: string;
+  id?: string;
   from?: string;
   to?: string;
   subject?: string;
@@ -25,6 +26,7 @@ export function parseEntry(text: string): ParsedEntry {
     const key = line.slice(0, idx).trim();
     const val = line.slice(idx + 1).trim();
     if (key === "date") meta.date = val;
+    else if (key === "id") meta.id = val;
     else if (key === "from") meta.from = val;
     else if (key === "to") meta.to = val;
     else if (key === "subject") meta.subject = val;
@@ -38,6 +40,7 @@ export function serializeEntry(meta: EntryMeta, body: string): string {
   const lines = [
     "---",
     `date: ${meta.date ?? ""}`,
+    `id: ${meta.id ?? ""}`,
     `from: ${meta.from ?? ""}`,
     `to: ${meta.to ?? ""}`,
     `subject: ${meta.subject ?? ""}`,
