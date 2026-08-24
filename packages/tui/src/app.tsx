@@ -98,43 +98,74 @@ function Title() {
 }
 
 /** Centered popup listing every keybinding. */
-function HelpOverlay({
-  cols,
-  rows,
-  onClose,
-}: {
-  cols: number;
-  rows: number;
-  onClose: () => void;
-}) {
-  const w = Math.min(44, cols - 4);
-  const h = Math.min(20, rows - 4);
-  const binds: [string, string][] = [
-    ["j/k ↑↓", "navigate"],
-    ["g / G", "top / bottom"],
-    ["/", "search letters"],
-    ["s", "sort: date→alpha→len"],
-    ["t", "timeline sidebar"],
-    ["enter", "read / toggle month"],
-    ["c", "collapse month (timeline)"],
-    ["a", "write new"],
-    ["e", "edit letter"],
-    ["d", "delete letter"],
-    ["r", "refresh"],
-    ["p", "cloud sync (login / sync / logout)"],
-    ["h / ?", "help"],
-    ["q", "quit"],
-    ["f", "fullscreen (letter)"],
-    ["n", "next highlight (letter)"],
-    ["j/k", "scroll letter"],
-    ["esc", "back"],
-    ["enter", "open vim"],
-    ["esc", "cancel"],
+type HelpSection = { title: string; items: [string, string][] };
+
+function HelpSectionBox({ s }: { s: HelpSection }) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text bold color={GOLD}>
+        {s.title}
+      </Text>
+      {s.items.map(([k, d]) => (
+        <Text key={`${k}-${d}`}>
+          <Text color={MUTED}>{k.padEnd(12)}</Text>
+          <Text color={PAPER}>{d}</Text>
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
+function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
+  // Wide box, two key groups side by side; height follows the content so
+  // nothing is ever clipped or stretched.
+  const w = Math.min(78, cols - 4);
+  const left: HelpSection[] = [
+    {
+      title: "NAVIGATE",
+      items: [
+        ["j/k ↑↓", "move"],
+        ["g / G", "top / bottom"],
+        ["enter", "read / toggle month"],
+        ["esc", "back"],
+      ],
+    },
+    {
+      title: "LETTERS",
+      items: [
+        ["a", "write new"],
+        ["e", "edit"],
+        ["d", "delete"],
+        ["r", "refresh"],
+        ["/", "search letters"],
+        ["s", "sort: date/alpha/len"],
+        ["t", "timeline sidebar"],
+        ["c", "collapse month"],
+      ],
+    },
+  ];
+  const right: HelpSection[] = [
+    {
+      title: "READING",
+      items: [
+        ["f", "fullscreen"],
+        ["n", "next highlight"],
+        ["j/k", "scroll"],
+        ["enter", "open vim"],
+      ],
+    },
+    {
+      title: "CLOUD",
+      items: [
+        ["p", "sync (login/logout)"],
+        ["h / ?", "help"],
+        ["q", "quit"],
+      ],
+    },
   ];
   return (
     <Box
       width={w}
-      height={h}
       flexDirection="column"
       borderStyle="round"
       borderColor={ACCENT}
@@ -144,15 +175,21 @@ function HelpOverlay({
       <Text bold color={GOLD}>
         HELP
       </Text>
-      <Box flexDirection="column" marginTop={1}>
-        {binds.map(([k, desc], i) => (
-          <Text key={`${k}-${i}`}>
-            <Text color={MUTED}>{k.padEnd(12)}</Text>
-            <Text color={PAPER}>{desc}</Text>
-          </Text>
-        ))}
+      <Box flexDirection="row" gap={4}>
+        <Box flexDirection="column" flexGrow={1}>
+          {left.map((s) => (
+            <HelpSectionBox key={s.title} s={s} />
+          ))}
+        </Box>
+        <Box flexDirection="column" flexGrow={1}>
+          {right.map((s) => (
+            <HelpSectionBox key={s.title} s={s} />
+          ))}
+        </Box>
       </Box>
-      <Text color={FAINT}>esc / h — close</Text>
+      <Box marginTop={1}>
+        <Text color={FAINT}>esc / h — close</Text>
+      </Box>
     </Box>
   );
 }
@@ -454,7 +491,7 @@ export function App() {
   if (view === "help") {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
-        <HelpOverlay cols={cols} rows={rows} onClose={() => setView(helpReturn)} />
+        <HelpOverlay cols={cols} onClose={() => setView(helpReturn)} />
       </Box>
     );
   }
