@@ -282,7 +282,10 @@ export function App() {
           </Box>
         )}
         {showPreview && selected && (
-          <Box flexDirection="column" width={previewW} marginLeft={1}>
+          // Clip the letter to the pane: an auto-height preview column that
+          // overflows its row corrupts Yoga's layout of the whole tree (the
+          // header's children get laid out at y=-1 and vanish from the output).
+          <Box flexDirection="column" width={previewW} marginLeft={1} height={listH} overflowY="hidden">
             <LetterView
               letter={selected}
               width={previewW}

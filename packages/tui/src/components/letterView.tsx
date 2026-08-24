@@ -21,7 +21,11 @@ export function LetterView({
   const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
   const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
   const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
-  const shown = height ? bodyLines.slice(offset, offset + height) : bodyLines.slice(offset);
+  // Reserve 5 rows for Date/From/To/Subject + the rule, plus one for "… more".
+  const overhead = 5;
+  const more = bodyLines.length > (offset + (height ?? 0));
+  const bodyCount = height ? Math.max(0, height - overhead - (more ? 1 : 0)) : undefined;
+  const shown = bodyCount !== undefined ? bodyLines.slice(offset, offset + bodyCount) : bodyLines.slice(offset);
   const rule = "\u2500".repeat(Math.max(4, width - 2));
 
   return (
@@ -54,7 +58,7 @@ export function LetterView({
           </Text>
         ))}
       </Box>
-      {bodyLines.length > (offset + (height ?? 0)) && (
+      {more && (
         <Text color={FAINT}>
           {"\u2026"} more
         </Text>
