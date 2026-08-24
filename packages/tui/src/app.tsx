@@ -216,9 +216,9 @@ export function App() {
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
         <Text color={FAINT}>
-          <Text color={MUTED}>j/k</Text> navigate · <Text color={MUTED}>enter</Text> read ·{" "}
+          <Text color={MUTED}>j/k</Text> nav · <Text color={MUTED}>enter</Text> read ·{" "}
           <Text color={MUTED}>a</Text> write · <Text color={MUTED}>e</Text> edit ·{" "}
-          <Text color={MUTED}>d</Text> delete · <Text color={MUTED}>r</Text> refresh ·{" "}
+          <Text color={MUTED}>d</Text> del · <Text color={MUTED}>r</Text> refresh ·{" "}
           <Text color={MUTED}>q</Text> quit
         </Text>
       </Box>

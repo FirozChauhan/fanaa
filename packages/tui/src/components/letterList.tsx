@@ -1,7 +1,7 @@
 import React from "react";
-import { Text } from "ink";
+import { Box, Text } from "ink";
 import type { Letter } from "../data";
-import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
+import { GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
 
 /** Capitalize the first letter of a string. */
 function cap(s: string): string {
@@ -26,11 +26,15 @@ export function LetterList({
         const sel = i === selected;
         // Unique entry ID = HHMM timestamp + 6-char hash ("1220EACOE3").
         const id = l.key.slice(11, 15) + l.key.slice(16);
-        const subjW = Math.max(4, width - 3 - id.length - 2);
-        const subject = cap(truncate(l.meta.subject || "(no subject)", subjW));
+        const subjW = Math.max(4, width - 1 - id.length - 2);
+        // Pad the subject so the selection background spans the full row width.
+        const subject = cap(truncate(l.meta.subject || "(no subject)", subjW)).padEnd(subjW);
         return (
-          <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
-            <Text color={sel ? ACCENT : FAINT}>{sel ? "\u25b8 " : "  "}</Text>
+          <Text
+            key={l.key}
+            backgroundColor={sel ? SEL_BG : undefined}
+            wrap="truncate"
+          >
             <Text color={sel ? GOLD : MUTED} bold={sel}>
               {id}
             </Text>
