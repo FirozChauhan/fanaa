@@ -29,16 +29,18 @@ function nextMonthOrYear(rows: TreeRow[], i: number): TreeRow | undefined {
  * Folder-style Year → Month → entries sidebar (timeline mode):
  *
  *   2026
- *   ├── AUG
- *   │   ├── 1433A4U78J: This is testy
- *   │   └── 1416HGU3AL: Bold test
- *   └── JUL
- *       └── 0915TESTJ1: July test entry
+ *   ├ AUG
+ *   │ ├ 1433A4U78J: This is testy
+ *   │ └ 1416HGU3AL: Bold test
+ *   └ JUL
+ *     ├ 0915TESTJ1: July test entry
+ *     └ 1110TESTJ2: Earlier july test
  *   2025
- *   └── DEC
- *       └── 0800TESTD1: December test
+ *   └ DEC
+ *     └ 0800TESTD1: December test
  *
- * `rows` is the FULL tree (connectors must see siblings beyond the viewport);
+ * Indents: month 2 chars (connector + space), entry 4 chars (2-char guide
+ * + connector + space). `rows` is the FULL tree (connectors must see siblings beyond the viewport);
  * `start`/`height` pick the visible window, `selAbs` is the absolute row of the
  * selected letter.
  */
@@ -70,7 +72,7 @@ export function TimelineList({
         if (row.kind === "month") {
           const n = Number(row.text) - 1;
           const sib = nextMonthOrYear(rows, abs);
-          const conn = sib && sib.kind === "month" ? "├── " : "└── ";
+          const conn = sib && sib.kind === "month" ? "├ " : "└ ";
           return (
             <Text key={`m${abs}`} color={ACCENT} bold>
               <Text color={FAINT}>{conn}</Text>
@@ -83,10 +85,10 @@ export function TimelineList({
         const id = l.key.slice(11, 15) + l.key.slice(16);
         // Parent month still has more months after this letter → guide line.
         const sib = nextMonthOrYear(rows, abs);
-        const guid = sib && sib.kind === "month" ? "│   " : "    ";
+        const guid = sib && sib.kind === "month" ? "│ " : "  ";
         const next = rows[abs + 1];
-        const conn = next && next.kind === "letter" ? "├── " : "└── ";
-        const subjW = Math.max(4, width - 1 - 8 - id.length - 2);
+        const conn = next && next.kind === "letter" ? "├ " : "└ ";
+        const subjW = Math.max(4, width - 1 - 4 - id.length - 2);
         const subject = cap(truncate(l.meta.subject || "(no subject)", subjW)).padEnd(subjW);
         return (
           <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
