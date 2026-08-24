@@ -23,18 +23,23 @@ export function LetterView({
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text color={FAINT}>{rfcDate(letter.date).toUpperCase()}</Text>
       <Text>
-        <Text color={FAINT}>from  </Text>
+        <Text color={FAINT}>Date: </Text>
+        <Text color={PAPER}>{rfcDate(letter.date).toUpperCase()}</Text>
+      </Text>
+      <Text>
+        <Text color={FAINT}>From: </Text>
         <Text color={MUTED}>{truncate(m.from || "", Math.max(4, width - 8))}</Text>
       </Text>
       <Text>
-        <Text color={FAINT}>to    </Text>
+        <Text color={FAINT}>To: </Text>
         <Text color={ACCENT}>{truncate(m.to || "", Math.max(4, width - 8))}</Text>
       </Text>
-      <Text color={DIVIDER}>{rule}</Text>
-      <Text bold color={GOLD}>
-        {truncate(m.subject || "(no subject)", Math.max(4, width - 2))}
+      <Text>
+        <Text color={FAINT}>Subject: </Text>
+        <Text bold color={GOLD}>
+          {truncate(m.subject || "(no subject)", Math.max(4, width - 11))}
+        </Text>
       </Text>
       <Text color={DIVIDER}>{rule}</Text>
       <Box flexDirection="column">
