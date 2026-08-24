@@ -7,7 +7,7 @@ import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
-import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors } from "./util";
+import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBody } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
 import { readFileSync } from "node:fs";
@@ -61,6 +61,7 @@ function HelpOverlay({
     ["h / ?", "help"],
     ["q", "quit"],
     ["f", "fullscreen (letter)"],
+    ["n", "next highlight (letter)"],
     ["j/k", "scroll letter"],
     ["esc", "back"],
     ["enter", "open vim"],
@@ -100,6 +101,7 @@ export function App() {
   const [helpReturn, setHelpReturn] = useState<View>("browse");
   const [letterFull, setLetterFull] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [hlIdx, setHlIdx] = useState(-1); // -1 = before first highlight
   const [subject, setSubject] = useState("");
 
   // Terminal size in state: Ink's own resize handler re-lays-out the existing
@@ -172,7 +174,11 @@ export function App() {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
       else if (input === "f") setLetterFull((v) => !v);
-      else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
+      else if (input === "n" && hlLines.length > 0) {
+        const next = (hlIdx + 1) % hlLines.length;
+        setHlIdx(next);
+        setOffset(hlLines[next]);
+      } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
       else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
       else if (input === "h" || input === "?") {
         setHelpReturn("letter");
@@ -190,6 +196,7 @@ export function App() {
     else if (input === "G") setIdx(letters.length - 1);
     else if (key.return && selected) {
       setOffset(0);
+      setHlIdx(-1);
       setView("letter");
     } else if (input === "a") {
       setSubject("");
@@ -252,6 +259,14 @@ export function App() {
   const showPreview = inLetter || cols >= 62;
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
   const listH = Math.max(3, rows - 4);
+
+  // Body line indices that contain a #"…"# highlight. Must use the same wrap
+  // width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
+  const hlLines = useMemo(() => {
+    if (!selected) return [];
+    const lines = wrapBody(selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
+    return lines.map((ln, i) => (ln.some((s) => s.underline) ? i : -1)).filter((i) => i >= 0);
+  }, [selected, previewW]);
   const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
   const visible = letters.slice(listTop, listTop + listH);
   const selInList = idx - listTop;

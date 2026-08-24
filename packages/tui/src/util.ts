@@ -55,23 +55,25 @@ export function wrap(s: string, width: number): string[] {
   return out;
 }
 
-export type InlineSeg = { text: string; bold?: boolean; italic?: boolean };
+export type InlineSeg = { text: string; bold?: boolean; italic?: boolean; underline?: boolean };
 
 /**
  * Split inline markdown into formatted segments: ***bold italic***, **bold**,
- * *italic*. Unmatched markers stay literal; nesting is not supported (inner
- * markers render as plain text inside the outer formatting).
+ * *italic*, and #"highlight"# (underline). Unmatched markers stay literal;
+ * nesting is not supported (inner markers render as plain text inside the
+ * outer formatting).
  */
 export function parseInline(s: string): InlineSeg[] {
   const out: InlineSeg[] = [];
-  const re = /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*/g;
+  const re = /#"(.+?)"#|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
     if (m.index > last) out.push({ text: s.slice(last, m.index) });
-    if (m[1] !== undefined) out.push({ text: m[1], bold: true, italic: true });
-    else if (m[2] !== undefined) out.push({ text: m[2], bold: true });
-    else out.push({ text: m[3], italic: true });
+    if (m[1] !== undefined) out.push({ text: m[1], underline: true });
+    else if (m[2] !== undefined) out.push({ text: m[2], bold: true, italic: true });
+    else if (m[3] !== undefined) out.push({ text: m[3], bold: true });
+    else out.push({ text: m[4], italic: true });
     last = m.index + m[0].length;
   }
   if (last < s.length) out.push({ text: s.slice(last) });
@@ -80,37 +82,38 @@ export function parseInline(s: string): InlineSeg[] {
 
 /**
  * Word-wrap formatted segments (same algorithm as wrap()) while carrying the
- * bold/italic style across line breaks, so markers never leak at wrap points.
+ * bold/italic/underline style across line breaks, so markers never leak at
+ * wrap points.
  */
-export function wrapSegments(segs: InlineSeg[], width: number): InlineSeg[][] {
+export function wrapBody(body: string, width: number): InlineSeg[][] {
   const out: InlineSeg[][] = [];
-  let line: InlineSeg[] = [];
-  let lineLen = 0;
-  const flush = () => {
-    if (line.length > 0) {
-      out.push(line);
-      line = [];
-      lineLen = 0;
+  for (const raw of body.split("\n")) {
+    const segs = parseInline(raw);
+    if (raw.trim() === "") {
+      out.push([{ text: "" }]);
+      continue;
     }
-  };
-  for (const seg of segs) {
-    const parts = seg.text.split("\n");
-    parts.forEach((part, pi) => {
-      if (pi > 0) flush();
-      if (part === "") {
-        out.push([{ text: "" }]);
-        return;
+    let line: InlineSeg[] = [];
+    let lineLen = 0;
+    const flush = () => {
+      if (line.length > 0) {
+        out.push(line);
+        line = [];
+        lineLen = 0;
       }
-      const words = part.split(" ");
-      for (const w of words) {
+    };
+    for (const seg of segs) {
+      for (const w of seg.text.split(" ")) {
         if (w === "") continue;
         const need = lineLen === 0 ? w.length : w.length + 1;
         if (lineLen + need > width) flush();
-        line.push({ text: (lineLen === 0 ? "" : " ") + w, bold: seg.bold, italic: seg.italic });
+        line.push({ text: (lineLen === 0 ? "" : " ") + w, bold: seg.bold, italic: seg.italic, underline: seg.underline });
         lineLen = lineLen === 0 ? w.length : lineLen + 1 + w.length;
       }
-    });
+    }
+    const before = out.length;
+    flush();
+    if (out.length === before) out.push([{ text: "" }]);
   }
-  flush();
   return out;
 }

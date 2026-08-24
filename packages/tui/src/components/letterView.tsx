@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
-import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, parseInline, wrapSegments } from "../util";
+import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, wrapBody } from "../util";
 
 /** A letter, laid out like a real letter: date, from/to, subject heading, body. */
 export function LetterView({
@@ -22,7 +22,7 @@ export function LetterView({
   // Wrap email addresses in angle brackets; names ("ME") stay bare.
   const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
   const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
-  const bodyLines = wrapSegments(parseInline(letter.body.replace(/\n+$/, "")), Math.max(20, width - 2));
+  const bodyLines = wrapBody(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
   // Reserve 5 rows for Date/From/To/Subject + the rule, plus one for "… more".
   const overhead = 5;
   const more = bodyLines.length > (offset + (height ?? 0));
@@ -57,7 +57,7 @@ export function LetterView({
         {shown.map((ln, i) => (
           <Text key={i}>
             {ln.map((seg, j) => (
-              <Text key={j} color={PAPER} bold={seg.bold} italic={seg.italic}>
+              <Text key={j} color={PAPER} bold={seg.bold} italic={seg.italic} underline={seg.underline}>
                 {seg.text || " "}
               </Text>
             ))}
