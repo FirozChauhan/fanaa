@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { openSync, writeSync, appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stdin, stdout } from "node:process";
+import { ReadStream } from "node:tty";
 
 /**
  * Fanaa's built-in full-screen editor — pure ANSI, zero dependencies.
@@ -58,9 +59,45 @@ export function runEditor(path: string): Promise<void> {
   return Promise.resolve();
 }
 
-/** The full-screen editor itself, run by editor-entry.ts in a fresh process. */
+/**
+ * The full-screen editor itself, run by editor-entry.ts in a fresh process.
+ * Reads/writes the CONTROLLING TERMINAL (/dev/tty) directly, so it works even
+ * when the inherited stdin/stdout are broken pipes or weird states.
+ */
 export function interactiveEdit(path: string): Promise<void> {
   return new Promise((resolve) => {
+    // --- Terminal I/O: prefer /dev/tty, fall back to inherited stdio. ---
+    let ttyFd: number | null = null;
+    try {
+      ttyFd = openSync("/dev/tty", "r+");
+    } catch {}
+    let input: { isTTY?: boolean; setRawMode(b: boolean): void; on(e: "data", cb: (d: Buffer) => void): void; removeListener(e: "data", cb: (d: Buffer) => void): void; resume(): void } = stdin;
+    if (ttyFd !== null) {
+      try {
+        input = new ReadStream(ttyFd);
+      } catch {
+        ttyFd = null;
+      }
+    }
+    const emit = (s: string) => {
+      if (ttyFd !== null) {
+        try {
+          writeSync(ttyFd, s);
+          return;
+        } catch {}
+      }
+      stdout.write(s);
+    };
+    const inputTTY = ttyFd !== null || !!stdin.isTTY;
+    const diag = `[${new Date().toISOString()}] pid=${process.pid} io=${ttyFd !== null ? "/dev/tty" : "stdio"} stdinTTY=${stdin.isTTY} term=${process.env.TERM ?? "?"}\n`;
+    try {
+      appendFileSync("/tmp/fanaa-editor-diag.log", diag);
+    } catch {}
+    // No terminal at all — nothing to edit interactively.
+    if (!inputTTY) {
+      resolve();
+      return;
+    }
     const raw = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
     const lines = raw ? raw.replace(/\n$/, "").split("\n") : [""];
     const original = lines.join("\n");
@@ -168,25 +205,25 @@ export function interactiveEdit(path: string): Promise<void> {
           Math.max(0, row - Math.floor(bodyRows / 2)),
           Math.max(0, lines.length - bodyRows),
         );
-        let out = "\x1b[2J\x1b[H";
+        let frame = "\x1b[2J\x1b[H";
         for (let i = 0; i < bodyRows; i++) {
           const li = top + i;
           let text = li < lines.length ? lines[li] : "";
           text = cut(text, scrollX);
           const vis = (cut(text, textW) + " ".repeat(textW)).slice(0, textW);
           const body = li === row ? `${CUR_LINE_BG}${vis}\x1b[0m` : vis;
-          out += body;
-          if (i < bodyRows - 1) out += "\n";
+          frame += body;
+          if (i < bodyRows - 1) frame += "\n";
         }
         const dirty = lines.join("\n") !== original;
         const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}`;
         const right = prompt === "discard" ? "" : "ctrl-s save · ctrl-c cancel · ctrl-z undo";
         const pad = Math.max(1, cols - left.length - right.length);
-        out += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
+        frame += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
         const onRow = Math.min(bodyRows, row - top + 1);
         const onCol = Math.min(cols, col - scrollX + 1);
-        out += `\x1b[${onRow};${onCol}H`;
-        stdout.write(out);
+        frame += `\x1b[${onRow};${onCol}H`;
+        emit(frame);
       } catch (e) {
         // draw errors can't be shown — try to save and exit cleanly
         try { writeFileSync(path, lines.join("\n") ? lines.join("\n") + "\n" : ""); } catch {}
@@ -196,11 +233,11 @@ export function interactiveEdit(path: string): Promise<void> {
     };
 
     const cleanup = () => {
-      stdin.setRawMode(false);
-      stdin.removeListener("data", listener);
+      input.setRawMode(false);
+      input.removeListener("data", listener);
       process.removeListener("SIGWINCH", onResize);
       process.removeListener("exit", restoreTerm);
-      stdout.write("\x1b[?25h\x1b[0m\x1b[?2004l\x1b[2J\x1b[H");
+      emit("\x1b[?25h\x1b[0m\x1b[?2004l\x1b[2J\x1b[H");
       resolve();
     };
     const finish = () => {
@@ -325,14 +362,19 @@ export function interactiveEdit(path: string): Promise<void> {
       draw();
     };
     const restoreTerm = () => {
-      try { stdout.write("\x1b[?25h\x1b[0m\x1b[?2004l"); } catch {}
+      try { emit("\x1b[?25h\x1b[0m\x1b[?2004l"); } catch {}
     };
 
     process.on("SIGWINCH", onResize);
     process.on("exit", restoreTerm);
-    stdout.write("\x1b[?25l\x1b[?2004h");
-    stdin.setRawMode(true);
-    stdin.resume();
+    emit("\x1b[?25l\x1b[?2004h\x1b[?u");
+    try {
+      input.setRawMode(true);
+    } catch {
+      emit("\x1b[?25h\x1b[0m\x1b[?2004l");
+      resolve();
+      return;
+    }
     // Discard stale bytes (readline read-ahead, TUI exit leftovers) that arrive
     // within the first 60 ms — then the editor is live.
     const t0 = Date.now();
@@ -340,7 +382,8 @@ export function interactiveEdit(path: string): Promise<void> {
       if (Date.now() - t0 < 60) return;
       onData(c);
     };
-    stdin.on("data", listener);
+    input.on("data", listener);
+    input.resume();
     draw();
   });
 }
