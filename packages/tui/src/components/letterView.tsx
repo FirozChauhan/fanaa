@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
-import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, truncate, wrap } from "../util";
+import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, wrap } from "../util";
 
 /** A letter, laid out like a real letter: date, from/to, subject heading, body. */
 export function LetterView({
@@ -46,7 +46,7 @@ export function LetterView({
       </Text>
       <Text>
         <Text color={FAINT}>Subject: </Text>
-        <Text bold color={GOLD}>
+        <Text bold backgroundColor={SEL_BG} color={GOLD}>
           {truncate(m.subject || "(no subject)", Math.max(4, width - 11))}
         </Text>
       </Text>
