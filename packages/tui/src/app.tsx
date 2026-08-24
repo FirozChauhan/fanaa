@@ -406,8 +406,9 @@ export function App() {
                 {hasAbove && <Text color={FAINT}>{" \u2191"}</Text>}
                 {tree ? (
                   <TimelineList
-                    rows={tree.rows.slice(listTop, listTop + listH)}
-                    selRow={selInList}
+                    rows={tree.rows}
+                    start={listTop}
+                    selAbs={tree.map[fIdx] ?? 0}
                     width={listW - 1}
                     height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
                   />
