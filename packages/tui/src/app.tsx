@@ -3,10 +3,9 @@ import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { computeStreak, dayCounts, loadLetters, type Letter } from "./data";
 import { openEditor } from "./editor";
-import { Heatmap } from "./components/heatmap";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
-import { ACCENT, truncate } from "./util";
+import { ACCENT } from "./util";
 
 type View = "browse" | "letter" | "compose";
 
@@ -35,14 +34,9 @@ export function App() {
     if (view === "letter") {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
-      else if (key.return || input === "q" || key.escape || key.rightArrow) setView("browse");
-      else if (input === "a") {
-        setSubject("");
-        setView("compose");
-      }
+      else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
       return;
     }
-    // browse
     if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
     else if (key.upArrow || input === "k") setIdx((i) => Math.max(0, i - 1));
     else if (input === "g") setIdx(0);
@@ -54,7 +48,7 @@ export function App() {
       setSubject("");
       setView("compose");
     } else if (input === "r") setLetters(loadLetters());
-    else if (input === "q" || key.ctrl === true && input === "c") process.exit(0);
+    else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
   const submitCompose = async () => {
@@ -71,12 +65,9 @@ export function App() {
 
   if (view === "compose") {
     return (
-      <Box flexDirection="column" padding={2}>
+      <Box flexDirection="column" height={rows} paddingX={2} paddingTop={2}>
         <Text bold color={ACCENT}>
           {"\u27ea"} fanaa — compose
-        </Text>
-        <Text color="#777" dimColor>
-          A new letter to yourself. Subject first, then your editor opens.
         </Text>
         <Box marginTop={1}>
           <Text color="#777" dimColor>
@@ -90,7 +81,11 @@ export function App() {
             placeholder="(no subject)"
           />
         </Box>
-        {busy && <Text color="#777" dimColor>opening editor…</Text>}
+        {busy && (
+          <Text color="#777" dimColor>
+            opening editor…
+          </Text>
+        )}
         <Text color="#555" dimColor>
           enter = write · esc = cancel
         </Text>
@@ -98,55 +93,91 @@ export function App() {
     );
   }
 
-  const listW = Math.min(42, Math.floor(cols * 0.4));
-  const previewW = cols - listW - 5;
-  const showPreview = previewW >= 36 && letters.length > 0;
-  const headerH = 3;
-  const heatmapH = cols >= 72 && letters.length > 0 ? 9 : 0;
-  const footerH = 1;
-  const bodyH = Math.max(4, rows - headerH - heatmapH - footerH - 4);
-
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      {/* header */}
-      <Box>
+  if (letters.length === 0) {
+    return (
+      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
         <Text bold color={ACCENT}>
           {"\u27ea"} fanaa
         </Text>
         <Text color="#777" dimColor>
-          {"   "}letters to yourself
+          no letters yet
         </Text>
-        <Text color="#777" dimColor>
-          {"  ·  "}streak{" "}
-        </Text>
-        <Text bold color={streak > 0 ? ACCENT : "#555"}>
-          {streak}
-        </Text>
-        <Text color="#777" dimColor>
-          {"  ·  "}
-          {letters.length} letter{letters.length === 1 ? "" : "s"}
+        <Text color="#555" dimColor>
+          press a to write your first one
         </Text>
       </Box>
+    );
+  }
 
-      {/* heatmap */}
-      {heatmapH > 0 && <Heatmap counts={counts} />}
+  if (view === "letter") {
+    const bodyH = Math.max(3, rows - 8);
+    return (
+      <Box flexDirection="column" height={rows} paddingX={1}>
+        <LetterView letter={selected} width={cols - 2} height={bodyH} offset={offset} />
+        <Text color="#555" dimColor>
+          j/k scroll · esc back
+        </Text>
+      </Box>
+    );
+  }
 
-      {/* split: list + preview */}
-      <Box flexDirection="row" flexGrow={1} marginTop={1}>
-        <Box flexDirection="column" width={listW}>
-          <LetterList letters={letters} selected={idx} width={listW} />
+  const listW = Math.min(36, Math.floor(cols * 0.34));
+  const listH = Math.max(3, rows - 3);
+  const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
+  const visible = letters.slice(listTop, listTop + listH);
+  const selInList = idx - listTop;
+  const hasAbove = listTop > 0;
+  const hasBelow = letters.length > listTop + listH;
+  const showPreview = cols >= 56;
+  const previewW = cols - listW;
+
+  return (
+    <Box flexDirection="row" height={rows}>
+      <Box flexDirection="column" width={listW} height={rows}>
+        <Box paddingX={1} justifyContent="space-between">
+          <Text bold color={ACCENT}>
+            {"\u27ea"} fanaa
+          </Text>
+          <Text color="#777" dimColor>
+            {streak > 0 ? `streak ${streak} · ` : ""}
+            {letters.length}
+          </Text>
         </Box>
-        {showPreview && selected && (
-          <Box flexDirection="column" width={previewW} paddingLeft={1} borderStyle="round" borderColor="#333">
-            <LetterView letter={selected} width={previewW - 2} height={bodyH - 2} offset={offset} />
-          </Box>
-        )}
+        <Box flexDirection="column" flexGrow={1}>
+          {hasAbove && (
+            <Text color="#444" dimColor>
+              {"\u2191"}
+            </Text>
+          )}
+          <LetterList
+            letters={visible}
+            selected={selInList}
+            width={listW}
+            height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
+          />
+          {hasBelow && (
+            <Text color="#444" dimColor>
+              {"\u2193"}
+            </Text>
+          )}
+        </Box>
+        <Box paddingX={1}>
+          <Text color="#555" dimColor>
+            j/k · enter · a · q
+          </Text>
+        </Box>
       </Box>
-
-      {/* footer */}
-      <Text color="#555" dimColor>
-        j/k navigate · enter read · a compose · r refresh · q quit
-      </Text>
+      {showPreview && selected && (
+        <Box
+          flexDirection="column"
+          width={previewW}
+          height={rows}
+          borderStyle="round"
+          borderColor="#333"
+        >
+          <LetterView letter={selected} width={previewW - 2} height={rows - 4} offset={0} />
+        </Box>
+      )}
     </Box>
   );
 }
