@@ -145,13 +145,16 @@ export function App() {
 
   const listW = Math.min(42, Math.floor(cols * 0.38));
   const showPreview = cols >= 62;
-  const previewW = showPreview ? cols - listW - 1 : 0;
+  const previewW = showPreview ? cols - listW - 2 : 0; // 1 = divider, 1 = margin
   const listH = Math.max(3, rows - 4);
   const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
   const visible = letters.slice(listTop, listTop + listH);
   const selInList = idx - listTop;
   const hasAbove = listTop > 0;
   const hasBelow = letters.length > listTop + listH;
+
+  // Number of lines the divider column should span.
+  const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
 
   return (
     <Box flexDirection="column" height={rows}>
@@ -195,8 +198,14 @@ export function App() {
         </Box>
         {showPreview && selected && (
           <>
-            <Text color={DIVIDER}>{"\u2502"}</Text>
-            <Box flexDirection="column" width={previewW}>
+            <Box flexDirection="column" width={1}>
+              {Array.from({ length: dividerLines }).map((_, i) => (
+                <Text key={i} color={DIVIDER}>
+                  {"\u2502"}
+                </Text>
+              ))}
+            </Box>
+            <Box flexDirection="column" width={previewW} marginLeft={1}>
               <LetterView letter={selected} width={previewW} height={listH} offset={0} />
             </Box>
           </>
