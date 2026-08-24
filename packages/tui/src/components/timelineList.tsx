@@ -6,7 +6,7 @@ import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
 /** One row of the timeline sidebar tree. */
 export type TreeRow =
   | { kind: "year"; text: string }
-  | { kind: "month"; text: string }
+  | { kind: "month"; text: string; collapsed?: boolean }
   | { kind: "letter"; letter: Letter };
 
 const MONTHS = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(" ");
@@ -73,9 +73,11 @@ export function TimelineList({
           const n = Number(row.text) - 1;
           const sib = nextMonthOrYear(rows, abs);
           const conn = sib && sib.kind === "month" ? "├ " : "└ ";
+          const mark = row.collapsed ? "▸ " : "▾ ";
           return (
             <Text key={`m${abs}`} color={ACCENT} bold>
               <Text color={FAINT}>{conn}</Text>
+              <Text color={FAINT}>{mark}</Text>
               {MONTHS[n] ?? row.text}
             </Text>
           );

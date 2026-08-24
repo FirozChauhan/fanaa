@@ -24,6 +24,36 @@ const VERSION = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ).version as string;
 
+// Timeline sidebar rows: Year → Month → letters, plus letter→row index map.
+// Collapsed months have their letters omitted from the rows. Standalone so the
+// `t` handler can compute rows while the memo's `tree` is null.
+function buildTree(lst: Letter[], col: Set<string>) {
+  const rows: TreeRow[] = [];
+  const map = new Map<string, number>();
+  let lastYear = "";
+  let lastMonth = "";
+  for (const l of lst) {
+    const y = l.key.slice(0, 4);
+    const m = l.key.slice(5, 7);
+    const monthKey = `${y}-${m}`;
+    const isCollapsed = col.has(monthKey);
+    if (y !== lastYear) {
+      rows.push({ kind: "year", text: y });
+      lastYear = y;
+      lastMonth = "";
+    }
+    if (m !== lastMonth) {
+      rows.push({ kind: "month", text: m, collapsed: isCollapsed });
+      lastMonth = m;
+    }
+    if (!isCollapsed) {
+      map.set(l.key, rows.length);
+      rows.push({ kind: "letter", letter: l });
+    }
+  }
+  return { rows, map };
+}
+
 function Title() {
   // Show the journal category next to the logo when it's not the default.
   const title = CATEGORY === "fanaa" ? TITLE : `${TITLE} \u00b7 ${CATEGORY}`;
@@ -57,7 +87,8 @@ function HelpOverlay({
     ["/", "search letters"],
     ["s", "sort: date→alpha→len"],
     ["t", "timeline sidebar"],
-    ["enter", "read letter"],
+    ["enter", "read / toggle month"],
+    ["c", "collapse month (timeline)"],
     ["a", "write new"],
     ["e", "edit letter"],
     ["d", "delete letter"],
@@ -113,6 +144,11 @@ export function App() {
   const [sortMode, setSortMode] = useState<SortMode>("date");
   const [timeline, setTimeline] = useState(false);
 
+  // Collapsed months (timeline mode): "YYYY-MM" keys.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Tree-row selection in timeline mode (index into tree.rows).
+  const [tIdx, setTIdx] = useState(0);
+
   // Terminal size in state: Ink's own resize handler re-lays-out the existing
   // vDOM but never re-invokes component functions, so a bare `stdout.rows`
   // read stays stale until some keystroke forces a re-render. Re-render on
@@ -142,30 +178,7 @@ export function App() {
   // Selection stays within the ordered list even as search/sort/timeline shrink it.
   const fIdx = Math.min(idx, Math.max(0, order.length - 1));
   const selected = order[fIdx];
-  // Timeline sidebar rows: Year → Month → letters, plus letter→row index map.
-  const tree = useMemo(() => {
-    if (!timeline) return null;
-    const rows: TreeRow[] = [];
-    const map: number[] = [];
-    let lastYear = "";
-    let lastMonth = "";
-    for (const l of order) {
-      const y = l.key.slice(0, 4);
-      const m = l.key.slice(5, 7);
-      if (y !== lastYear) {
-        rows.push({ kind: "year", text: y });
-        lastYear = y;
-        lastMonth = "";
-      }
-      if (m !== lastMonth) {
-        rows.push({ kind: "month", text: m });
-        lastMonth = m;
-      }
-      map.push(rows.length);
-      rows.push({ kind: "letter", letter: l });
-    }
-    return { rows, map };
-  }, [timeline, order]);
+  const tree = useMemo(() => (timeline ? buildTree(order, collapsed) : null), [timeline, order, collapsed]);
   const stats = useMemo(() => {
     const counts = dayCounts(letters);
     return { total: letters.length, streak: computeStreak(counts) };
@@ -241,6 +254,78 @@ export function App() {
       } else if (key.return || /[\r\n]/.test(input)) setSearching(false);
       return;
     }
+    if (timeline && tree) {
+      // Timeline mode: selection moves over ALL tree rows (years, months,
+      // letters). Enter opens a letter or toggles a month's collapse.
+      const last = tree.rows.length - 1;
+      const row = tree.rows[Math.min(tIdx, last)];
+      const rowLetter = row.kind === "letter" ? row.letter : null;
+      if (key.downArrow || input === "j") setTIdx((i) => Math.min(last, i + 1));
+      else if (key.upArrow || input === "k") setTIdx((i) => Math.max(0, i - 1));
+      else if (input === "g") setTIdx(0);
+      else if (input === "G") setTIdx(last);
+      else if (input.startsWith("/")) {
+        setQuery(input.slice(1));
+        setSearching(true);
+        setIdx(0);
+      } else if (input === "s") setSortMode((m) => (m === "date" ? "alpha" : m === "alpha" ? "len" : "date"));
+      else if (input === "t") {
+        // Leaving timeline: keep the selected tree row's letter (or the
+        // nearest letter after it) as the flat-mode selection.
+        if (row.kind === "letter") {
+          const i = order.findIndex((l) => l.key === row.letter.key);
+          if (i >= 0) setIdx(i);
+        } else {
+          for (let i2 = Math.min(tIdx, last) + 1; i2 < tree.rows.length; i2++) {
+            const r = tree.rows[i2];
+            if (r.kind === "letter") {
+              const i = order.findIndex((l) => l.key === r.letter.key);
+              if (i >= 0) setIdx(i);
+              break;
+            }
+          }
+        }
+        setTimeline(false);
+      } else if (key.return || input === "c") {
+        if (row.kind === "month") {
+          // Year of this month = nearest year row above it.
+          let year = "";
+          for (let j = Math.min(tIdx, last) - 1; j >= 0; j--) {
+            const yr = tree.rows[j];
+            if (yr.kind === "year") {
+              year = yr.text;
+              break;
+            }
+          }
+          const monthKey = `${year}-${row.text}`;
+          setCollapsed((prev) => {
+            const next = new Set(prev);
+            if (next.has(monthKey)) next.delete(monthKey);
+            else next.add(monthKey);
+            return next;
+          });
+        } else if (row.kind === "letter") {
+          const i = order.findIndex((l) => l.key === row.letter.key);
+          if (i >= 0) setIdx(i);
+          setOffset(0);
+          setHlIdx(-1);
+          setView("letter");
+        }
+        // year rows: Enter does nothing
+      } else if (input === "a") {
+        setSubject("");
+        setView("compose");
+      } else if (input === "e" && rowLetter) handOff(`EDIT:${rowLetter.key}`);
+      else if (input === "d" && rowLetter) handOff(`DELETE:${rowLetter.key}`);
+      else if (input === "h" || input === "?") {
+        setHelpReturn("browse");
+        setView("help");
+      } else if (input === "r") {
+        setLetters(loadLetters(JOURNAL));
+        setIdx(0);
+      } else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
+      return;
+    }
     if (key.downArrow || input === "j") setIdx((i) => Math.min(filtered.length - 1, i + 1));
     else if (key.upArrow || input === "k") setIdx((i) => Math.max(0, i - 1));
     else if (input === "g") setIdx(0);
@@ -252,7 +337,26 @@ export function App() {
       setIdx(0);
     }
     else if (input === "s") setSortMode((m) => (m === "date" ? "alpha" : m === "alpha" ? "len" : "date"));
-    else if (input === "t") setTimeline((v) => !v);
+    else if (input === "t") {
+      // Entering timeline: select the tree row of the current letter (or the
+      // nearest visible letter after it when its month is collapsed).
+      const t = buildTree(order, collapsed);
+      const direct = t.map.get(selected?.key ?? "");
+      if (direct !== undefined) setTIdx(direct);
+      else {
+        let found = -1;
+        for (let i = fIdx + 1; i < order.length && found < 0; i++) {
+          const r = t.map.get(order[i].key);
+          if (r !== undefined) found = r;
+        }
+        for (let i = fIdx - 1; i >= 0 && found < 0; i--) {
+          const r = t.map.get(order[i].key);
+          if (r !== undefined) found = r;
+        }
+        setTIdx(found < 0 ? 0 : found);
+      }
+      setTimeline(true);
+    }
     else if (key.return && selected) {
       setOffset(0);
       setHlIdx(-1);
@@ -281,11 +385,18 @@ export function App() {
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
   const listH = Math.max(3, rows - 4 - (searching ? 1 : 0));
 
+  // Selection: flat mode picks the letter at idx; timeline mode picks the tree
+  // row at tIdx (a month/year row has no letter → preview hides).
+  const tRow = tree ? Math.min(tIdx, Math.max(0, tree.rows.length - 1)) : 0;
+  const effectiveSelected = tree
+    ? (tree.rows[tRow].kind === "letter" ? tree.rows[tRow].letter : null)
+    : selected;
+
   // Wrapped body lines of the selected letter (shared cache with LetterView).
   const bodyLines = useMemo(() => {
-    if (!selected) return [];
-    return wrapBodyCached(selected.key, selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
-  }, [selected, previewW]);
+    if (!effectiveSelected) return [];
+    return wrapBodyCached(effectiveSelected.key, effectiveSelected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
+  }, [effectiveSelected, previewW]);
   // Body line indices that contain a #"…"# / #…# highlight. Must use the same
   // wrap width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
   const hlLines = useMemo(
@@ -341,10 +452,8 @@ export function App() {
 
   // Scroll window over the sidebar rows (letters, or tree rows in timeline mode).
   const listLen = tree ? tree.rows.length : filtered.length;
-  const selRow = tree ? (tree.map[fIdx] ?? 0) : fIdx;
-  const listTop = tree
-    ? Math.min(Math.max(0, selRow - listH + 1), Math.max(0, listLen - listH))
-    : Math.min(Math.max(0, fIdx - listH + 1), Math.max(0, fIdx));
+  const selRow = tree ? tRow : fIdx;
+  const listTop = Math.min(Math.max(0, selRow - listH + 1), Math.max(0, listLen - listH));
   const selInList = selRow - listTop;
   const hasAbove = listTop > 0;
   const hasBelow = listLen > listTop + listH;
@@ -408,7 +517,7 @@ export function App() {
                   <TimelineList
                     rows={tree.rows}
                     start={listTop}
-                    selAbs={tree.map[fIdx] ?? 0}
+                    selAbs={tRow}
                     width={listW - 1}
                     height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
                   />
@@ -425,7 +534,7 @@ export function App() {
             )}
           </Box>
         )}
-        {!full && showPreview && selected && (
+        {!full && showPreview && effectiveSelected && (
           <Box flexDirection="column" width={1}>
             {Array.from({ length: dividerLines }).map((_, i) => (
               <Text key={i} color={DIVIDER}>
@@ -434,13 +543,13 @@ export function App() {
             ))}
           </Box>
         )}
-        {showPreview && selected && (
+        {showPreview && effectiveSelected && (
           // Clip the letter to the pane: an auto-height preview column that
           // overflows its row corrupts Yoga's layout of the whole tree (the
           // header's children get laid out at y=-1 and vanish from the output).
           <Box flexDirection="column" width={previewW} marginLeft={1} height={listH} overflowY="hidden">
             <LetterView
-              letter={selected}
+              letter={effectiveSelected}
               width={previewW}
               height={listH}
               offset={inLetter ? offset : 0}
