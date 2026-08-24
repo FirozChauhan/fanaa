@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot, journalRoot } from "fanaa-core";
@@ -111,6 +111,24 @@ export function App() {
     const counts = dayCounts(letters);
     return { total: letters.length, streak: computeStreak(counts) };
   }, [letters]);
+
+  // Exit cleanly when the terminal dies (stdin EOF, EIO, stdout EPIPE…)
+  // so orphaned Ink processes don't busy-loop consuming 100% CPU.
+  useEffect(() => {
+    const onEnd = () => process.exit(0);
+    process.stdin.on("end", onEnd);
+    process.stdin.on("close", onEnd);
+    process.stdin.on("error", onEnd);
+    process.stdout.on("error", onEnd);
+    process.stderr.on("error", onEnd);
+    return () => {
+      process.stdin.off("end", onEnd);
+      process.stdin.off("close", onEnd);
+      process.stdin.off("error", onEnd);
+      process.stdout.off("error", onEnd);
+      process.stderr.off("error", onEnd);
+    };
+  }, []);
 
   /**
    * Hand off to the CLI wrapper: it opens vim on the letter body (git-commit
@@ -291,6 +309,7 @@ export function App() {
               width={previewW}
               height={listH}
               offset={inLetter ? offset : 0}
+              highlightSubject={inLetter}
             />
           </Box>
         )}

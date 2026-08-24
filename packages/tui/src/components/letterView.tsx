@@ -10,11 +10,13 @@ export function LetterView({
   width,
   height,
   offset = 0,
+  highlightSubject = false,
 }: {
   letter: Letter;
   width: number;
   height?: number;
   offset?: number;
+  highlightSubject?: boolean;
 }) {
   const m = letter.meta;
   // Wrap email addresses in angle brackets; names ("ME") stay bare.
@@ -46,7 +48,7 @@ export function LetterView({
       </Text>
       <Text>
         <Text color={FAINT}>Subject: </Text>
-        <Text bold backgroundColor={SEL_BG} color={GOLD}>
+        <Text bold backgroundColor={highlightSubject ? SEL_BG : undefined} color={GOLD}>
           {truncate(m.subject || "(no subject)", Math.max(4, width - 11))}
         </Text>
       </Text>
