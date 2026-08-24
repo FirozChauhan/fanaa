@@ -59,13 +59,13 @@ export type InlineSeg = { text: string; bold?: boolean; italic?: boolean; underl
 
 /**
  * Split inline markdown into formatted segments: ***bold italic***, **bold**,
- * *italic*, and #"highlight"# (underline). Unmatched markers stay literal;
- * nesting is not supported (inner markers render as plain text inside the
- * outer formatting).
+ * *italic*, #"highlight"# (underline), and bare #highlight# (underline).
+ * Unmatched markers stay literal; nesting is not supported (inner markers
+ * render as plain text inside the outer formatting).
  */
 export function parseInline(s: string): InlineSeg[] {
   const out: InlineSeg[] = [];
-  const re = /#"(.+?)"#|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*/g;
+  const re = /#"(.+?)"#|\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|#(.+?)#/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
@@ -73,7 +73,8 @@ export function parseInline(s: string): InlineSeg[] {
     if (m[1] !== undefined) out.push({ text: m[1], underline: true });
     else if (m[2] !== undefined) out.push({ text: m[2], bold: true, italic: true });
     else if (m[3] !== undefined) out.push({ text: m[3], bold: true });
-    else out.push({ text: m[4], italic: true });
+    else if (m[4] !== undefined) out.push({ text: m[4], italic: true });
+    else out.push({ text: m[5], underline: true });
     last = m.index + m[0].length;
   }
   if (last < s.length) out.push({ text: s.slice(last) });
