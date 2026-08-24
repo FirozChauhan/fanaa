@@ -79,7 +79,7 @@ export function App() {
     return (
       <Box flexDirection="column" height={rows} paddingX={2} paddingTop={3}>
         <Title />
-        <Text color={MUTED}>a new letter — subject first, then your editor opens</Text>
+        <Text color={MUTED}>a new letter — subject first, then the fanaa editor</Text>
         <Box marginTop={1}>
           <Text bold color={ACCENT}>
             {"\u276f"} {" "}
@@ -138,11 +138,7 @@ export function App() {
         <Box flexGrow={1} justifyContent="center">
           <Text color={MUTED}>letters only you will ever read</Text>
         </Box>
-        <Box width={12} alignItems="flex-end">
-          <Text color={MUTED}>
-            {letters.length} letter{letters.length === 1 ? "" : "s"}
-          </Text>
-        </Box>
+        <Box width={12} alignItems="flex-end" />
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 

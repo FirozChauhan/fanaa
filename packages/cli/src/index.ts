@@ -17,10 +17,10 @@ function help(): void {
   console.log(`fanaa — write letters only you will ever read.
 
 Usage:
-  fanaa                 write today's letter (asks subject, opens $EDITOR,
-                        or built-in composer if no $EDITOR is set)
+  fanaa                 write today's letter — asks subject, opens the built-in
+                        full-screen editor (FANAA_EDITOR=vim to use your own)
   fanaa add "text"      quick letter — body from the argument
-  fanaa add             compose letter without opening an editor
+  fanaa add             compose a letter on the command line (ctrl-d or .end)
   fanaa write           same as \"fanaa add\", explicit
   fanaa yesterday       read a letter  (also: today, YYYY-MM-DD, MM-DD)
   fanaa tui             the beautiful full-screen TUI
@@ -86,7 +86,7 @@ async function cmdWrite(opts: {
   if (opts.mode === "editor") {
     const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
     writeFileSync(tmp, "");
-    runEditor(tmp);
+    await runEditor(tmp);
     newBody = readFileSync(tmp, "utf8");
   } else if (opts.mode === "lines") {
     newBody = await composeLines();
@@ -227,12 +227,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Plain `fanaa`: $EDITOR if set, built-in composer otherwise (stdin when piped).
-  const mode: BodyMode = process.env.EDITOR || process.env.VISUAL
-    ? "editor"
-    : process.stdin.isTTY
-      ? "lines"
-      : "stdin";
+  // Plain `fanaa`: always the built-in full-screen editor (TTY), stdin when piped.
+  const mode: BodyMode = process.stdin.isTTY ? "editor" : "stdin";
   await cmdWrite({ dateKey, from, to, subject, values, mode });
 }
 

@@ -19,29 +19,30 @@ bun link          # makes `fanaa` available everywhere
 ## Usage
 
 ```bash
-fanaa                    # asks for a subject, opens $EDITOR blank — just write
-                         # (built-in composer if no $EDITOR is set — no vim needed)
-fanaa add "milk, eggs"   # quick capture: appends to today's letter
-fanaa add                # compose a letter without any editor
+fanaa                    # asks for a subject, opens the built-in full-screen
+                         # editor — no vim, no $EDITOR needed
+fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
+fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter
 fanaa -v                 # set from / to / subject (from & to become defaults)
-fanaa yesterday          # read a letter as email (today, YYYY-MM-DD, MM-DD)
+fanaa yesterday          # read letters as email (today, YYYY-MM-DD, MM-DD)
 fanaa ls                 # list recent letters
 fanaa whoami             # show who you write as, and to
 fanaa --from kitten --to heart   # costume change for one letter
 fanaa --date 2026-08-23  # backdate (forgot to write last night)
 ```
 
-No `$EDITOR`? `fanaa` falls back to a built-in composer: type lines, finish
-with Ctrl+D or `.end` on its own line. Quick captures via `fanaa add` never
-touch an editor at all.
+Fanaa ships its own full-screen editor (insert mode, undo, paste):
+`ctrl-s` saves, `ctrl-c` cancels, `ctrl-z` undoes. Set `FANAA_EDITOR=vim` if
+you insist on an external editor. Every capture writes a fresh letter file —
+nothing is ever merged or appended.
 
 ## Layout
 
 ```
 ~/.fanaa/
-├── entries/2026/08/2026-08-24.md   # markdown, frontmatter, git-committed
-└── config.toml                     # identity defaults
+├── entries/2026/08/2026-08-24-0912.md   # one letter = one file, git-committed
+└── config.toml                          # identity defaults
 ```
 
 ## Roadmap
