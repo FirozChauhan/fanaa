@@ -8,6 +8,7 @@ import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
+import { inKitty, listMonospaceFonts, setKittyFont } from "./fonts";
 
 // The wrapper passes the active journal category; entries live in its repo.
 import { readFileSync } from "node:fs";
@@ -42,14 +43,18 @@ function Title() {
 function HelpOverlay({
   cols,
   rows,
+  fonts,
+  fontStatus,
   onClose,
 }: {
   cols: number;
   rows: number;
+  fonts: string[];
+  fontStatus: string;
   onClose: () => void;
 }) {
-  const w = Math.min(44, cols - 4);
-  const h = Math.min(20, rows - 4);
+  const w = Math.min(64, cols - 4);
+  const h = Math.min(24, rows - 2);
   const binds: [string, string][] = [
     ["j/k ↑↓", "navigate"],
     ["g / G", "top / bottom"],
@@ -88,7 +93,28 @@ function HelpOverlay({
           </Text>
         ))}
       </Box>
-      <Text color={FAINT}>esc / h — close</Text>
+      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, w - 4))}</Text>
+      <Text bold color={GOLD}>
+        FONTS (kitty)
+      </Text>
+      <Box flexDirection="column">
+        {[0, 1].map((row) => (
+          <Text key={row}>
+            {[0, 1, 2].map((col) => {
+              const i = row * 3 + col;
+              if (i >= fonts.length) return <Text key={i}>{" ".repeat(19)}</Text>;
+              return (
+                <Text key={i}>
+                  <Text color={ACCENT}>{i + 1}</Text>
+                  <Text color={PAPER}> {fonts[i].slice(0, 17).padEnd(17)}</Text>
+                </Text>
+              );
+            })}
+          </Text>
+        ))}
+      </Box>
+      <Text color={fontStatus.startsWith("font set") ? FAINT : AMBER}>{fontStatus}</Text>
+      <Text color={FAINT}>1-6 = font · esc / h — close</Text>
     </Box>
   );
 }
@@ -103,6 +129,11 @@ export function App() {
   const [offset, setOffset] = useState(0);
   const [hlIdx, setHlIdx] = useState(-1); // -1 = before first highlight
   const [subject, setSubject] = useState("");
+  // Installed monospace fonts for the help popup's font picker (kitty).
+  const [fonts] = useState<string[]>(() => listMonospaceFonts());
+  const [fontStatus, setFontStatus] = useState(() =>
+    inKitty() ? "1-6 = change font family" : "fonts: only inside kitty"
+  );
 
   // Terminal size in state: Ink's own resize handler re-lays-out the existing
   // vDOM but never re-invokes component functions, so a bare `stdout.rows`
@@ -188,6 +219,10 @@ export function App() {
     }
     if (view === "help") {
       if (key.escape || input === "h" || input === "?" || input === "q") setView(helpReturn);
+      else if (/^[1-6]$/.test(input)) {
+        const f = fonts[Number(input) - 1];
+        if (f) setFontStatus(setKittyFont(f).msg);
+      }
       return;
     }
     if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
@@ -238,7 +273,7 @@ export function App() {
   if (view === "help") {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
-        <HelpOverlay cols={cols} rows={rows} onClose={() => setView(helpReturn)} />
+        <HelpOverlay cols={cols} rows={rows} fonts={fonts} fontStatus={fontStatus} onClose={() => setView(helpReturn)} />
       </Box>
     );
   }
