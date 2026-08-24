@@ -1,0 +1,13 @@
+{
+  "name": "fanaa",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Fanaa — terminal journal of letters to yourself",
+  "bin": {
+    "fanaa": "src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
