@@ -1,8 +1,0 @@
-Script started on 2026-08-24 17:40:57+05:30 [COMMAND="bun run /home/asrar/code/Production/Resume\ Projects/ProjectFanaa/packages/cli/src/index.ts login name-test3@example.dev" <not executed on terminal>]
-[2m(dev server — the code is printed on the server console)[0m
-[1G[0J[36m?[0m 6-digit code [16G103197
-[1G[0J[36m?[0m Full name (shown in the TUI header) [39GAsrar Rahman
-[32m✓[0m hello, Asrar Rahman — nice to meet you
-[32m✓[0m signed in as name-test3@example.dev — try `fanaa sync`
-
-Script done on 2026-08-24 17:41:02+05:30 [COMMAND_EXIT_CODE="0"]
