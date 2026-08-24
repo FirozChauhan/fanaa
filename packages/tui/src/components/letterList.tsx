@@ -22,6 +22,11 @@ function dayLabel(base: string, time: string, multi: boolean): string {
   return `${base.slice(5).replace("-", " ")}${suffix}`;
 }
 
+/** Capitalize the first letter of a string. */
+function cap(s: string): string {
+  return s.length ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 export function LetterList({
   letters,
   selected,
@@ -42,8 +47,8 @@ export function LetterList({
         const base = l.key.slice(0, 10);
         const time = l.key.length > 10 ? l.key.slice(11, 15) : "";
         const multi = rows.filter((r) => r.key.slice(0, 10) === base).length > 1;
-        const label = dayLabel(base, time, multi);
-        const subject = truncate(l.meta.subject || "(no subject)", Math.max(4, subjW - label.length));
+        const label = cap(dayLabel(base, time, multi));
+        const subject = cap(truncate(l.meta.subject || "(no subject)", Math.max(4, subjW - label.length)));
         return (
           <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
             <Text color={sel ? ACCENT : FAINT}>{sel ? "\u25b8 " : "  "}</Text>
