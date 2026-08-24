@@ -92,13 +92,19 @@ fanaa logout                  # forget the session token
 ```
 
 Sync is a **local-first outbox**: writes, edits and deletes made offline
-are queued locally and pushed on the next `fanaa sync`; changes from other
+are queued locally and pushed on the next sync; changes from other
 devices are pulled since the last cursor. Conflicts resolve
 last-write-wins on timestamps, and deletes replicate as tombstones (a
 letter deleted on one device disappears everywhere). The session token and
 sync state live in `~/.fanaa/state/` (0600, git-guarded). Set
 `FANAA_API_URL` to point the CLI at a specific server (default
 `http://localhost:8787`).
+
+**In the TUI**, the same flow lives in one key: press `p` from anywhere
+to open the cloud panel — sign in (email → code from your inbox), sync
+now, or sign out — without ever leaving the app. The CLI and the TUI
+share the same session, so `fanaa login` once and either one stays signed
+in. Deletes made in the TUI are queued as tombstones automatically.
 
 ## Roadmap
 
