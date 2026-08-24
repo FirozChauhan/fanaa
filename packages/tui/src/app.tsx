@@ -113,8 +113,8 @@ const SPLASH_LOGO = `███████ ███████ ██   ██
 ██      ██   ██ ██  ███ ██   ██ ██   ██
 ██      ██   ██ ██   ██ ██   ██ ██   ██`;
 
-/** Braille spinner frames — narrow (1 cell) in every terminal. */
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/** Progress-bar loader width (cells) on the splash. */
+const BAR_W = 24;
 /** Boot splash duration before auto-advancing (any key skips sooner). */
 const SPLASH_MS = 3000;
 
@@ -130,10 +130,14 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
     const t = setTimeout(onDone, SPLASH_MS);
     return () => clearTimeout(t);
   }, [onDone]);
-  // Animated loading spinner while the splash is up.
-  const [spin, setSpin] = useState(0);
+  // Progress-bar loader while the splash is up: fills 0% -> 100% over
+  // SPLASH_MS, so the bar visually completes right as the app appears.
+  const [progress, setProgress] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setSpin((s) => (s + 1) % SPINNER.length), 90);
+    const start = Date.now();
+    const t = setInterval(() => {
+      setProgress(Math.min(100, Math.round(((Date.now() - start) / SPLASH_MS) * 100)));
+    }, 60);
     return () => clearInterval(t);
   }, []);
   // Logo is static — parse + gradient once per mount.
@@ -172,8 +176,9 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
         <Text color={DIVIDER}>{VERSION}</Text>
       </Box>
       <Box marginTop={1}>
-        <Text color={MUTED}>{SPINNER[spin]}</Text>
-        <Text color={FAINT}> loading</Text>
+        <Text color={AMBER}>{"█".repeat(Math.round((progress / 100) * BAR_W))}</Text>
+        <Text color={MUTED}>{"░".repeat(BAR_W - Math.round((progress / 100) * BAR_W))}</Text>
+        <Text color={FAINT}> {String(progress).padStart(3)}%</Text>
       </Box>
     </Box>
   );
