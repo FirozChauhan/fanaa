@@ -225,7 +225,7 @@ export function App() {
   const tree = useMemo(() => (timeline ? buildTree(order, collapsed) : null), [timeline, order, collapsed]);
   const stats = useMemo(() => {
     const counts = dayCounts(letters);
-    return { total: letters.length, streak: computeStreak(counts) };
+    return { streak: computeStreak(counts) };
   }, [letters]);
 
   // Exit cleanly when the terminal dies (stdin EOF, EIO, stdout EPIPE…)
@@ -546,21 +546,14 @@ export function App() {
             <Text color={FAINT}> · </Text>
           </>
         )}
-        <Text color={MUTED}>
-          <Text bold color={GOLD}>
-            {stats.total}
-          </Text>{" "}
-          {stats.total === 1 ? "letter" : "letters"}
-          {stats.streak > 1 && (
-            <>
-              {"  "}•{"  "}
-              <Text bold color={ACCENT}>
-                {stats.streak}
-              </Text>{" "}
-              day streak
-            </>
-          )}
-        </Text>
+        {stats.streak > 1 && (
+          <Text color={MUTED}>
+            <Text bold color={ACCENT}>
+              {stats.streak}
+            </Text>{" "}
+            day streak
+          </Text>
+        )}
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 
