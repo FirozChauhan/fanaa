@@ -291,7 +291,7 @@ export function App() {
 
       {/* footer */}
       <Box paddingX={1}>
-        <Text color={MUTED}>v{VERSION}</Text>
+        <Text color={MUTED}>V{VERSION}</Text>
         <Text color={FAINT}> · </Text>
         <Text color={FAINT}>
           <Text color={MUTED}>H</Text>: Help
