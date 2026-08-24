@@ -60,6 +60,7 @@ function HelpOverlay({
     ["r", "refresh"],
     ["h / ?", "help"],
     ["q", "quit"],
+    ["f", "fullscreen (letter)"],
     ["j/k", "scroll letter"],
     ["esc", "back"],
     ["enter", "open vim"],
@@ -97,6 +98,7 @@ export function App() {
   const [idx, setIdx] = useState(0);
   const [view, setView] = useState<View>("browse");
   const [helpReturn, setHelpReturn] = useState<View>("browse");
+  const [letterFull, setLetterFull] = useState(false);
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
 
@@ -138,6 +140,7 @@ export function App() {
     if (view === "letter") {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
+      else if (input === "f") setLetterFull((v) => !v);
       else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
       else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
       else if (input === "h" || input === "?") {
@@ -198,7 +201,9 @@ export function App() {
     );
   }
 
-  if (letters.length === 0) {
+  if (view === "letter") {
+    // letter shares the split layout below; fullscreen is a pane-level toggle
+  } else if (letters.length === 0) {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
         <Title />
@@ -210,20 +215,12 @@ export function App() {
     );
   }
 
-  if (view === "letter") {
-    const bodyH = Math.max(3, rows - 9);
-    return (
-      <Box flexDirection="column" height={rows} paddingX={1}>
-        <LetterView letter={selected} width={cols - 2} height={bodyH} offset={offset} />
-        <Text color={FAINT}>j/k scroll · e edit · d delete · esc back</Text>
-      </Box>
-    );
-  }
-
+  const inLetter = view === "letter";
+  const full = inLetter && letterFull;
   const listW = Math.min(42, Math.floor(cols * 0.38));
-  const showPreview = cols >= 62;
-  const previewW = showPreview ? cols - listW - 2 : 0; // 1 = divider, 1 = margin
-  const listH = Math.max(3, rows - 4);
+  const showPreview = inLetter || cols >= 62;
+  const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
+  const listH = Math.max(3, rows - (inLetter ? 5 : 4));
   const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
   const visible = letters.slice(listTop, listTop + listH);
   const selInList = idx - listTop;
@@ -259,37 +256,52 @@ export function App() {
 
       {/* panes */}
       <Box flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column" width={listW} paddingLeft={1}>
-          {hasAbove && (
-            <Text color={FAINT}>{" \u2191"}</Text>
-          )}
-          <LetterList
-            letters={visible}
-            selected={selInList}
-            width={listW - 1}
-            height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
-          />
-          {hasBelow && (
-            <Text color={FAINT}>{" \u2193"}</Text>
-          )}
-        </Box>
+        {!full && (
+          <Box flexDirection="column" width={listW} paddingLeft={1}>
+            {hasAbove && (
+              <Text color={FAINT}>{" \u2191"}</Text>
+            )}
+            <LetterList
+              letters={visible}
+              selected={selInList}
+              width={listW - 1}
+              height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
+            />
+            {hasBelow && (
+              <Text color={FAINT}>{" \u2193"}</Text>
+            )}
+          </Box>
+        )}
+        {!full && showPreview && selected && (
+          <Box flexDirection="column" width={1}>
+            {Array.from({ length: dividerLines }).map((_, i) => (
+              <Text key={i} color={DIVIDER}>
+                {"\u2502"}
+              </Text>
+            ))}
+          </Box>
+        )}
         {showPreview && selected && (
-          <>
-            <Box flexDirection="column" width={1}>
-              {Array.from({ length: dividerLines }).map((_, i) => (
-                <Text key={i} color={DIVIDER}>
-                  {"\u2502"}
-                </Text>
-              ))}
-            </Box>
-            <Box flexDirection="column" width={previewW} marginLeft={1}>
-              <LetterView letter={selected} width={previewW} height={listH} offset={0} />
-            </Box>
-          </>
+          <Box flexDirection="column" width={previewW} marginLeft={1}>
+            <LetterView
+              letter={selected}
+              width={previewW}
+              height={listH}
+              offset={inLetter ? offset : 0}
+            />
+          </Box>
         )}
       </Box>
 
       {/* footer */}
+      {inLetter && (
+        <Text color={FAINT}>
+          {" "}j/k scroll ·{" "}
+          <Text color={MUTED}>f</Text> {letterFull ? "split" : "fullscreen"} ·{" "}
+          <Text color={MUTED}>e</Text> edit · <Text color={MUTED}>d</Text> del ·{" "}
+          <Text color={MUTED}>esc</Text> back
+        </Text>
+      )}
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
         <Text color={MUTED}>{VERSION}</Text>
