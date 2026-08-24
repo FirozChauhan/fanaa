@@ -17,6 +17,8 @@ export function LetterView({
   offset?: number;
 }) {
   const m = letter.meta;
+  // Wrap email addresses in angle brackets; names ("ME") stay bare.
+  const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
   const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
   const shown = height ? bodyLines.slice(offset, offset + height) : bodyLines.slice(offset);
   const rule = "\u2500".repeat(Math.max(4, width - 2));
@@ -24,16 +26,16 @@ export function LetterView({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text>
-        <Text color={FAINT}>Date: </Text>
+        <Text color={FAINT}>Date:    </Text>
         <Text color={PAPER}>{rfcDate(letter.date).toUpperCase()}</Text>
       </Text>
       <Text>
-        <Text color={FAINT}>From: </Text>
-        <Text color={MUTED}>{truncate(m.from || "", Math.max(4, width - 8))}</Text>
+        <Text color={FAINT}>From:    </Text>
+        <Text color={MUTED}>{truncate(email(m.from || ""), Math.max(4, width - 12))}</Text>
       </Text>
       <Text>
-        <Text color={FAINT}>To: </Text>
-        <Text color={ACCENT}>{truncate(m.to || "", Math.max(4, width - 8))}</Text>
+        <Text color={FAINT}>To:      </Text>
+        <Text color={ACCENT}>{truncate(email(m.to || ""), Math.max(4, width - 12))}</Text>
       </Text>
       <Text>
         <Text color={FAINT}>Subject: </Text>
