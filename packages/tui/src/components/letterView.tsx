@@ -19,12 +19,12 @@ export function LetterView({
   const m = letter.meta;
   // Wrap email addresses in angle brackets; names ("ME") stay bare.
   const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
-  const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 10));
+  const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
   const shown = height ? bodyLines.slice(offset, offset + height) : bodyLines.slice(offset);
-  const rule = "\u2500".repeat(Math.max(4, width - 10));
+  const rule = "\u2500".repeat(Math.max(4, width - 2));
 
   return (
-    <Box flexDirection="column" paddingLeft={9} paddingRight={1}>
+    <Box flexDirection="column" paddingX={1}>
       <Text>
         <Text color={FAINT}>Date:    </Text>
         <Text color={PAPER}>{rfcDate(letter.date).toUpperCase()}</Text>
