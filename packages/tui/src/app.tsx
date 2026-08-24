@@ -1,8 +1,10 @@
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import React, { useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
+import { fanaaRoot } from "fanaa-core";
 import { computeStreak, dayCounts, loadLetters, type Letter } from "./data";
-import { openEditor } from "./editor";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { ACCENT } from "./util";
@@ -16,7 +18,6 @@ export function App() {
   const [view, setView] = useState<View>("browse");
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const cols = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
@@ -25,7 +26,6 @@ export function App() {
   const selected = letters[idx];
 
   useInput((input, key) => {
-    if (busy) return;
     if (view === "compose") {
       if (key.escape) setView("browse");
       else if (key.ctrl && input === "c") process.exit(0);
@@ -51,16 +51,15 @@ export function App() {
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
-  const submitCompose = async () => {
-    setBusy(true);
-    try {
-      await openEditor(subject.trim());
-    } finally {
-      setBusy(false);
-    }
-    setLetters(loadLetters());
-    setIdx(0);
-    setView("browse");
+  /**
+   * Hand off to the CLI's write flow by fully exiting the TUI (exit 66).
+   * The `fanaa tui` wrapper sees the code, reads the subject from
+   * ~/.fanaa/.tui-pending, runs the editor with a clean terminal, then
+   * relaunches this TUI.
+   */
+  const submitCompose = () => {
+    writeFileSync(join(fanaaRoot(), ".tui-pending"), subject.trim());
+    process.exit(66);
   };
 
   if (view === "compose") {
@@ -77,15 +76,9 @@ export function App() {
             value={subject}
             onChange={setSubject}
             onSubmit={submitCompose}
-            focus={!busy}
             placeholder="(no subject)"
           />
         </Box>
-        {busy && (
-          <Text color="#777" dimColor>
-            opening editor…
-          </Text>
-        )}
         <Text color="#555" dimColor>
           enter = write · esc = cancel
         </Text>

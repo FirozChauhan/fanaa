@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
@@ -171,9 +171,22 @@ async function main(): Promise<void> {
   const dateKey = dateArg ? (parseDateArg(dateArg) ?? dayKey(new Date())) : dayKey(new Date());
 
   if (cmd === "tui") {
+    // Loop: the TUI fully exits before the editor runs (terminal handoff), then restarts.
+    // Exit 66 = "compose requested" (subject stashed in .tui-pending).
     const tuiEntry = join(import.meta.dir, "../../tui/src/index.tsx");
-    const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
-    process.exitCode = res.status ?? 1;
+    const pending = join(root, ".tui-pending");
+    while (true) {
+      const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
+      if (res.status === 66) {
+        const subject = existsSync(pending) ? readFileSync(pending, "utf8").trim() : "";
+        rmSync(pending, { force: true });
+        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false });
+        continue;
+      }
+      if (res.status === 0) break; // normal quit
+      if (res.status === 130) continue; // ctrl+c in editor → back to TUI
+      break; // unexpected error
+    }
     return;
   }
   if (cmd === "ls" || cmd === "list") {
