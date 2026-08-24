@@ -107,16 +107,17 @@ export async function prepareVerification(
     "POST",
     `/email_addresses/${emailAddressId}/prepare_verification`,
   )) as {
-    verification: { id: string; status: string };
+    verification?: { id: string; status: string };
+    id?: string;
   };
 
-  if (
-    !res.verification ||
-    !res.verification.id
-  ) {
+  // Clerk's BAPI docs nest the result under .verification, but the live
+  // API returns it flat — accept either shape.
+  const ver = res.verification ?? res;
+  if (!ver?.id) {
     throw new Error("clerk: prepare_verification returned no verification id");
   }
-  return res.verification.id;
+  return ver.id;
 }
 
 /**
@@ -134,8 +135,11 @@ export async function attemptVerification(
     `/email_addresses/${emailAddressId}/attempt_verification`,
     { verification_id: verificationId, code },
   )) as {
-    verification: { status: string };
+    verification?: { status: string };
+    status?: string;
   };
 
-  return res.verification?.status === "verified";
+  // Same flat-vs-nested quirk as prepare_verification.
+  const ver = res.verification ?? res;
+  return ver.status === "verified";
 }
