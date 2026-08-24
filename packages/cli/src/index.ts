@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, basename, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
 import { dayKey, entryPath, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
-import { composeLines, runEditor } from "./editor";
+import { composeLines } from "./editor";
 import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
 import { commitEntry, gitEmail } from "./git";
 import { listEntries } from "./list";
@@ -17,8 +17,8 @@ function help(): void {
   console.log(`fanaa — write letters only you will ever read.
 
 Usage:
-  fanaa                 write today's letter — asks subject, opens the built-in
-                        full-screen editor (FANAA_EDITOR=vim to use your own)
+  fanaa                 write today's letter — asks subject, opens vim
+                        (FANAA_EDITOR=your-editor to override)
   fanaa add "text"      quick letter — body from the argument
   fanaa add             compose a letter on the command line (ctrl-d or .end)
   fanaa write           same as \"fanaa add\", explicit
@@ -42,6 +42,23 @@ function stampFor(dateKey: string): string {
   const now = new Date();
   base.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
   return localISO(base);
+}
+
+/** The editor used for letter bodies: vim by default, FANAA_EDITOR to override. */
+function runEditor(file: string): void {
+  const e = (process.env.FANAA_EDITOR?.trim() || "vim").split(/\s+/);
+  const args = [...e.slice(1)];
+  // Queue GA (last line + append) via feedkeys — vim processes queued keys
+  // before any terminal input, so it's genuinely in insert mode when the
+  // user types. (`-c 'normal GA'` fails: late terminal handshake bytes can
+  // kick vim back to normal mode before the first keystroke lands.)
+  if (/vim$/.test(e[0])) args.push("-c", "call feedkeys(\"GA\")");
+  args.push(file);
+  const res = spawnSync(e[0], args, { stdio: "inherit" });
+  if (res.error) {
+    console.error(`fanaa: could not launch ${e[0]}: ${res.error.message}`);
+    process.exitCode = 1;
+  }
 }
 
 type BodyMode = "editor" | "lines" | "arg" | "stdin";
@@ -86,7 +103,7 @@ async function cmdWrite(opts: {
   if (opts.mode === "editor") {
     const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
     writeFileSync(tmp, "");
-    await runEditor(tmp);
+    runEditor(tmp);
     newBody = readFileSync(tmp, "utf8");
   } else if (opts.mode === "lines") {
     newBody = await composeLines();
@@ -209,19 +226,34 @@ async function main(): Promise<void> {
     while (true) {
       const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
       if (res.status === 66) {
-        // The TUI writes the pending payload to .tui-pending; the entry
-        // write/edit + git commit happen here (exit 66 is only a handoff).
-        // New letter: "subject\nbody". Edit: "EDIT:<key>\nbody".
+        // The TUI hands the letter off to vim (git-commit style): it writes
+        // the subject (new letter) or "EDIT:<key>" (rewrite) to .tui-pending
+        // and exits; we open vim on a temp file, then write/commit the entry.
         const raw = existsSync(pending) ? readFileSync(pending, "utf8") : "";
         rmSync(pending, { force: true });
-        const nl = raw.indexOf("\n");
         if (raw.startsWith("EDIT:")) {
-          const key = (nl === -1 ? raw.slice(5) : raw.slice(5, nl)).trim();
-          const body = nl === -1 ? "" : raw.slice(nl + 1);
-          await cmdEdit(key, body);
+          const key = raw.slice(5).trim();
+          const p = entryPath(root, key);
+          if (!existsSync(p)) {
+            console.error(`No letter found at ${key}.`);
+            continue;
+          }
+          const { meta, body } = parseEntry(readFileSync(p, "utf8"));
+          const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
+          writeFileSync(tmp, body.replace(/\n+$/, ""));
+          runEditor(tmp);
+          const newBody = readFileSync(tmp, "utf8").replace(/\n+$/, "");
+          if (newBody !== body.replace(/\n+$/, "")) {
+            await cmdEdit(key, newBody);
+          } else {
+            console.log("No changes — nothing saved.");
+          }
         } else {
-          const subject = (nl === -1 ? raw : raw.slice(0, nl)).trim();
-          const body = nl === -1 ? "" : raw.slice(nl + 1);
+          const subject = raw.trim();
+          const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
+          writeFileSync(tmp, "");
+          runEditor(tmp);
+          const body = readFileSync(tmp, "utf8");
           await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false });
         }
         continue;
