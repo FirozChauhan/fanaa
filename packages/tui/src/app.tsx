@@ -4,14 +4,14 @@ import React, { useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot } from "fanaa-core";
-import { computeStreak, dayCounts, loadLetters, type Letter } from "./data";
+import { loadLetters, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
 
 type View = "browse" | "letter" | "compose";
 
-const TITLE = "\u2767 fanaa"; // ❧ fanaa
+const TITLE = "\u2767 FANAA"; // ❧ FANAA
 
 function Title() {
   const colors = gradientColors(TITLE, AMBER, GOLD);
@@ -36,8 +36,6 @@ export function App() {
 
   const cols = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
-  const counts = dayCounts(letters);
-  const streak = computeStreak(counts);
   const selected = letters[idx];
 
   useInput((input, key) => {
@@ -133,22 +131,18 @@ export function App() {
   return (
     <Box flexDirection="column" height={rows}>
       {/* header */}
-      <Box paddingX={1} justifyContent="space-between" alignItems="center">
-        <Title />
-        {cols >= 72 && <Text color={MUTED}>letters only you will ever read</Text>}
-        <Text color={MUTED}>
-          {streak > 0 && (
-            <>
-              <Text bold color={ACCENT}>
-                {streak}-day streak
-              </Text>
-              {"  ·  "}
-            </>
-          )}
-          <Text>
+      <Box paddingX={1} alignItems="center">
+        <Box width={12}>
+          <Title />
+        </Box>
+        <Box flexGrow={1} justifyContent="center">
+          <Text color={MUTED}>letters only you will ever read</Text>
+        </Box>
+        <Box width={12} alignItems="flex-end">
+          <Text color={MUTED}>
             {letters.length} letter{letters.length === 1 ? "" : "s"}
           </Text>
-        </Text>
+        </Box>
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 

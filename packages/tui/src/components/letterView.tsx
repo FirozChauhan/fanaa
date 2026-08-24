@@ -17,7 +17,7 @@ export function LetterView({
   offset?: number;
 }) {
   const m = letter.meta;
-  const bodyLines = wrap(letter.body, Math.max(20, width - 2));
+  const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
   const shown = height ? bodyLines.slice(offset, offset + height) : bodyLines.slice(offset);
   const rule = "\u2500".repeat(Math.max(4, width - 2));
 

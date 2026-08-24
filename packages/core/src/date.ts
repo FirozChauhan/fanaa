@@ -49,12 +49,18 @@ export function entryPath(root: string, key: string): string {
   return join(root, "entries", y, m, `${key}.md`);
 }
 
-/** Parse a user-supplied date string into a YYYY-MM-DD key. */
+/** Key for a new letter file: YYYY-MM-DD-HHMM — one letter, one file. */
+export function stampKey(base: string, d: Date): string {
+  return `${base}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+/** Parse a user-supplied date string into a key (day or exact letter). */
 export function parseDateArg(s: string): string | null {
   const now = new Date();
   if (s === "today") return dayKey(now);
   if (s === "yesterday") return dayKey(new Date(now.getTime() - 86400000));
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (/^\d{2}-\d{2}$/.test(s)) return `${now.getFullYear()}-${s}`;
+  if (/^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(s)) return s; // exact letter key
   return null;
 }

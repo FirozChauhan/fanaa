@@ -2,9 +2,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, basename, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
-import { dayKey, entryPath, localISO, parseDayKey, parseDateArg } from "fanaa-core";
+import { dayKey, entryPath, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
 import { composeLines, runEditor } from "./editor";
 import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
 import { commitEntry, gitEmail } from "./git";
@@ -54,8 +54,6 @@ async function cmdWrite(opts: {
   values: boolean;
   mode: BodyMode;
   argBody?: string;
-  /** TUI compose: open a blank buffer, then append to the day's entry. */
-  blank?: boolean;
 }): Promise<void> {
   const root = fanaaRoot();
   const cfg = loadConfig(root);
@@ -74,28 +72,28 @@ async function cmdWrite(opts: {
   }
   subject = subject || "";
 
-  const p = entryPath(root, opts.dateKey);
+  // One letter = one file: key YYYY-MM-DD-HHMM, deduped with -2, -3…
+  const now = new Date();
+  let key = stampKey(opts.dateKey, now);
+  for (let n = 2; existsSync(entryPath(root, key)); n++) {
+    key = `${stampKey(opts.dateKey, now)}-${n}`;
+  }
+  const p = entryPath(root, key);
   mkdirSync(dirname(p), { recursive: true });
-  const existing = existsSync(p) ? readFileSync(p, "utf8") : "";
-  const prevBody = parseEntry(existing).body;
 
-  // Acquire the body. Quick modes (add/stdin/lines) append to any existing
-  // entry for the day; editor mode lets you edit the full content.
+  // Every capture is a fresh letter; nothing is merged or pre-filled.
   let newBody: string;
   if (opts.mode === "editor") {
     const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
-    writeFileSync(tmp, opts.blank ? "" : prevBody);
+    writeFileSync(tmp, "");
     runEditor(tmp);
     newBody = readFileSync(tmp, "utf8");
-    if (opts.blank) newBody = prevBody ? `${prevBody}\n${newBody}` : newBody;
   } else if (opts.mode === "lines") {
-    const composed = await composeLines(prevBody);
-    newBody = prevBody ? `${prevBody}\n${composed}` : composed;
+    newBody = await composeLines();
   } else if (opts.mode === "arg") {
-    newBody = prevBody ? `${prevBody}\n${opts.argBody ?? ""}` : (opts.argBody ?? "");
+    newBody = opts.argBody ?? "";
   } else {
-    const piped = pipedInput();
-    newBody = prevBody ? `${prevBody}\n${piped}` : piped;
+    newBody = pipedInput();
   }
   newBody = newBody.replace(/\n+$/, "");
 
@@ -103,13 +101,9 @@ async function cmdWrite(opts: {
     console.log("Aborting fanaa due to empty entry.");
     return;
   }
-  if (newBody.trim() === prevBody.trim()) {
-    console.log("No changes made; nothing saved.");
-    return;
-  }
 
   const meta: EntryMeta = {
-    date: stampFor(opts.dateKey),
+    date: stampFor(key),
     from,
     to,
     subject,
@@ -117,19 +111,31 @@ async function cmdWrite(opts: {
   writeFileSync(p, serializeEntry(meta, newBody));
   const rev = commitEntry(root, p, subject || "(no subject)");
   const tail = rev ? `  [git: ${rev}]` : "";
-  console.log(`\n\u001b[32m\u2713\u001b[0m saved as ${from} \u2192 ${to}${tail}`);
+  console.log(`\n\u001b[32m\u2713\u001b[0m saved (${key}) as ${from} \u2192 ${to}${tail}`);
 }
 
-function cmdRead(key: string): void {
+function cmdRead(arg: string): void {
   const root = fanaaRoot();
-  const p = entryPath(root, key);
-  if (!existsSync(p)) {
-    console.error(`No letter for ${key}. Write one: fanaa`);
+  const exact = /^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(arg);
+  const glob = new Bun.Glob("entries/**/*.md");
+  const hits: { key: string; text: string }[] = [];
+  for (const f of glob.scanSync({ cwd: root, absolute: false, onlyFiles: true })) {
+    const key = basename(f).replace(/\.md$/, "");
+    if (exact ? key === arg : key.startsWith(arg)) {
+      hits.push({ key, text: readFileSync(join(root, f), "utf8") });
+    }
+  }
+  hits.sort((a, b) => b.key.localeCompare(a.key));
+  if (hits.length === 0) {
+    console.error(`No letters for ${arg}. Write one: fanaa`);
     process.exitCode = 1;
     return;
   }
-  const { meta, body } = parseEntry(readFileSync(p, "utf8"));
-  renderEntry(meta, body);
+  hits.forEach((h, i) => {
+    if (i > 0) console.log("");
+    const { meta, body } = parseEntry(h.text);
+    renderEntry(meta, body);
+  });
 }
 
 function cmdWhoami(): void {
@@ -183,7 +189,7 @@ async function main(): Promise<void> {
       if (res.status === 66) {
         const subject = existsSync(pending) ? readFileSync(pending, "utf8").trim() : "";
         rmSync(pending, { force: true });
-        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false, blank: true });
+        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false });
         continue;
       }
       if (res.status === 0) break; // normal quit
