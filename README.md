@@ -81,8 +81,9 @@ Every letter gets a unique key `YYYY-MM-DD-HHMM-XXXXXX` (`XXXXXX` is a
 ## Cloud sync
 
 Local letters are the source of truth; the cloud is an optional backup
-(powered by the `fanaa-api` package — a Hono worker on Neon/Postgres with
-email-code auth). Nothing is uploaded until you sign in:
+(powered by the `fanaa-api` package — a Hono worker on Neon/Postgres, with
+email-code auth handled by Clerk so codes land in your inbox with no SMTP
+of your own). Nothing is uploaded until you sign in:
 
 ```bash
 fanaa login you@example.com   # a 6-digit code is emailed to you
