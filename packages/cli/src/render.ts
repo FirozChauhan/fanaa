@@ -16,16 +16,24 @@ export function bold(s: string): string {
   return color ? `\u001b[1m${s}\u001b[0m` : s;
 }
 
+/**
+ * Strip terminal control characters from rendered output — a letter body or
+ * frontmatter containing `\x1b[` sequences must not inject into the terminal.
+ */
+function clean(s: string): string {
+  return s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
+}
+
 /** Render an entry like an email: headers, blank line, body. */
 export function renderEntry(meta: EntryMeta, body: string): void {
   const date = rfcDate(parseDateStamp(meta.date));
   const lines = [
     `${dim("Date:")}    ${bold(date)}`,
-    `${dim("From:")}    ${bold(meta.from || "")}`,
-    `${dim("To:")}      ${bold(meta.to || "")}`,
-    `${dim("Subject:")} ${bold(meta.subject || "(no subject)")}`,
+    `${dim("From:")}    ${bold(clean(meta.from || ""))}`,
+    `${dim("To:")}      ${bold(clean(meta.to || ""))}`,
+    `${dim("Subject:")} ${bold(clean(meta.subject || "(no subject)"))}`,
     "",
-    body,
+    clean(body),
   ];
   console.log(lines.join("\n"));
 }

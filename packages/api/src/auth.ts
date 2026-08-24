@@ -6,6 +6,9 @@ import { CLERK_SECRET_KEY, CODE_RESEND_COOLDOWN_SECONDS, CODE_TTL_SECONDS, SESSI
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Failed verify attempts allowed per code before it is burned. */
+const MAX_CODE_ATTEMPTS = 5;
+
 export interface User {
   id: string;
   email: string;
@@ -29,25 +32,32 @@ auth.post("/request", async (c) => {
   const email = String(body?.email ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return c.json({ error: "invalid email" }, 400);
 
-  if (CLERK_SECRET_KEY) {
-    let emailAddressId: string;
-    let verificationId: string;
-    try {
-      ({ emailAddressId } = await ensureUser(email));
-      verificationId = await prepareVerification(emailAddressId);
-    } catch (e) {
-      return c.json({ error: `clerk: ${e instanceof Error ? e.message : e}` }, 502);
-    }
-    return c.json({ ok: true, channel: "email", verification_id: verificationId });
-  }
-
   const s = await db();
+  // Rate limit FIRST, for BOTH paths — without it /auth/request is an open
+  // email-bombing relay (Clerk sends a real email to any address, and even
+  // the dev path spams the console/logs). One request per email per window.
   const recent = (await s`SELECT created_at FROM auth_codes WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`) as { created_at: Date | string }[];
   if (recent[0] && Date.now() - new Date(recent[0].created_at).getTime() < CODE_RESEND_COOLDOWN_SECONDS * 1000) {
     return c.json({ error: "slow down — wait a minute before requesting another code" }, 429);
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  if (CLERK_SECRET_KEY) {
+    let verificationId: string;
+    try {
+      const { emailAddressId } = await ensureUser(email);
+      verificationId = await prepareVerification(emailAddressId);
+    } catch (e) {
+      return c.json({ error: `clerk: ${e instanceof Error ? e.message : e}` }, 502);
+    }
+    // Marker row so the cooldown above persists across requests (one per
+    // email — the next request replaces it). It is never verified.
+    await s`DELETE FROM auth_codes WHERE email = ${email}`;
+    await s`INSERT INTO auth_codes (email, code, expires_at) VALUES (${email}, '', ${new Date(Date.now() + CODE_TTL_SECONDS * 1000)})`;
+    return c.json({ ok: true, channel: "email", verification_id: verificationId });
+  }
+
+  // 6 digits from a CSPRNG — never Math.random.
+  const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000);
   await s`INSERT INTO users (email) VALUES (${email}) ON CONFLICT (email) DO NOTHING`;
   await s`DELETE FROM auth_codes WHERE email = ${email}`;
@@ -91,8 +101,20 @@ auth.post("/verify", async (c) => {
       return c.json({ error: "invalid or expired code" }, 401);
     }
   } else {
-    const rows = (await s`SELECT code FROM auth_codes WHERE email = ${email} AND expires_at > now()`) as { code: string }[];
-    if (rows.length === 0 || rows[0].code !== code) {
+    // Dev path: local auth_codes row. Attempt-limited (MAX_CODE_ATTEMPTS
+    // misses burn the code — brute-forcing 6 digits would need a fresh email
+    // per 5 tries, and each email is cooldown-gated). A successful or burned
+    // code is deleted immediately so it can never be reused.
+    const rows = (await s`SELECT code, attempts FROM auth_codes WHERE email = ${email} AND expires_at > now()`) as { code: string; attempts: number }[];
+    if (rows.length === 0) return c.json({ error: "invalid or expired code" }, 401);
+    const row = rows[0];
+    if (row.code !== code) {
+      const used = row.attempts + 1;
+      if (used >= MAX_CODE_ATTEMPTS) {
+        await s`DELETE FROM auth_codes WHERE email = ${email}`;
+        return c.json({ error: "too many attempts — request a new code" }, 401);
+      }
+      await s`UPDATE auth_codes SET attempts = ${used} WHERE email = ${email}`;
       return c.json({ error: "invalid or expired code" }, 401);
     }
     await s`DELETE FROM auth_codes WHERE email = ${email}`;
@@ -110,6 +132,12 @@ auth.post("/verify", async (c) => {
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
   await s`INSERT INTO sessions (token, user_id, expires_at) VALUES (${token}, ${userId}, ${expiresAt})`;
 
+  // Opportunistic housekeeping: drop this user's expired sessions and any
+  // stale auth_codes rows (expired or Clerk cooldown markers) so the tables
+  // don't grow forever.
+  await s`DELETE FROM sessions WHERE user_id = ${userId} AND expires_at < now()`;
+  await s`DELETE FROM auth_codes WHERE email = ${email} AND (expires_at < now() OR code = '')`;
+
   return c.json({ token, user: { id: userId, email, name } });
 });
 
@@ -126,6 +154,18 @@ export const requireUser: MiddlewareHandler<ApiEnv> = async (c, next) => {
   c.set("user", { id: rows[0].id, email: rows[0].email });
   await next();
 };
+
+/**
+ * POST /auth/logout (Bearer) — revokes the session server-side. Without
+ * this a leaked token stays valid until its 30-day TTL, with no way to
+ * kill it early. Must be declared AFTER requireUser (TDZ).
+ */
+auth.post("/logout", requireUser, async (c) => {
+  const h = c.req.header("Authorization") ?? "";
+  const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
+  await (await db())`DELETE FROM sessions WHERE token = ${token}`;
+  return c.json({ ok: true });
+});
 
 /**
  * POST /auth/name  { name }  (Bearer)

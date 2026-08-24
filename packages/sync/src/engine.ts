@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { entryIdFromKey, entryPath, parseEntry, serializeEntry } from "fanaa-core";
+import { entryIdFromKey, entryPath, isValidKey, parseEntry, serializeEntry } from "fanaa-core";
 import {
   deleteLetter,
   pullLetters,
@@ -105,6 +105,10 @@ async function pushDirty(
 
 /** Apply a pulled letter: tombstone or write, both strictly LWW on timestamps. */
 function applyPulled(root: string, r: RemoteLetter): "written" | "tombstoned" | "kept" {
+  // Defense in depth: never let a server id become a filesystem path. The
+  // server now rejects malformed ids at /letters/batch, but rows written
+  // before that check (or by a buggy deployment) are skipped, not written.
+  if (!isValidKey(r.id)) return "kept";
   const p = entryPath(root, r.id);
   const updated = new Date(r.updated_at).getTime();
 

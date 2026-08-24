@@ -4,6 +4,7 @@
  *
  *   POST /auth/request         email → 6-digit code (email or dev channel)
  *   POST /auth/verify          code → { token, user } (30-day session)
+ *   POST /auth/logout          revoke the session (Bearer)
  *   GET  /letters?since=…      incremental pull (Bearer)
  *   POST /letters/batch        LWW upsert push (Bearer)
  *   POST /letters/:id/delete   tombstone (Bearer)
@@ -82,6 +83,11 @@ export function verifyCode(
   verificationId?: string,
 ): Promise<{ token: string; user: { id: string; email: string; name: string } }> {
   return api(apiUrl, "/auth/verify", { method: "POST", body: { email, code, verification_id: verificationId } });
+}
+
+/** POST /auth/logout — revokes the session token server-side. */
+export function logout(apiUrl: string, token: string): Promise<{ ok: true }> {
+  return api(apiUrl, "/auth/logout", { method: "POST", token, body: {} });
 }
 
 /**

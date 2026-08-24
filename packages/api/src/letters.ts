@@ -30,16 +30,30 @@ interface LetterRow {
   deleted_at: Date | string | null;
 }
 
+/**
+ * Letter ids become file paths on the client (entries/YYYY/MM/…). Enforce
+ * the shape server-side so a malicious/buggy client can't plant ids that
+ * traverse out of the journal when another device pulls them. Matches
+ * fanaa-core's KEY_RE: YYYY-MM-DD-HHMM plus optional suffix segments.
+ */
+const KEY_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)*$/;
+/** Cap a single push batch — a sync round chunks at 50, so 500 is generous. */
+const MAX_BATCH = 500;
+
 export const letters = new Hono<ApiEnv>();
 letters.use("*", requireUser);
 
 /** GET /letters?since=… — all rows (optionally changed since cursor), plus the new cursor. */
 letters.get("/", async (c) => {
   const since = c.req.query("since");
+  if (since && Number.isNaN(new Date(since).getTime())) {
+    return c.json({ error: "since must be an ISO timestamp" }, 400);
+  }
+  const sinceDate = since ? new Date(since) : null;
   const user = c.get("user");
   const s = await db();
   const rows = (since
-    ? await s`SELECT id, date, from_addr, to_addr, subject, body, updated_at, deleted_at FROM letters WHERE user_id = ${user.id} AND updated_at > ${new Date(since)} ORDER BY updated_at`
+    ? await s`SELECT id, date, from_addr, to_addr, subject, body, updated_at, deleted_at FROM letters WHERE user_id = ${user.id} AND updated_at > ${sinceDate} ORDER BY updated_at`
     : await s`SELECT id, date, from_addr, to_addr, subject, body, updated_at, deleted_at FROM letters WHERE user_id = ${user.id} ORDER BY updated_at`) as LetterRow[];
 
   let cursor: string | null = since ?? null;
@@ -76,6 +90,7 @@ letters.post("/batch", async (c) => {
   const body = await c.req.json().catch(() => null);
   const items = Array.isArray(body?.letters) ? body.letters : null;
   if (!items) return c.json({ error: "body.letters must be an array" }, 400);
+  if (items.length > MAX_BATCH) return c.json({ error: `batch too large (max ${MAX_BATCH} items)` }, 400);
 
   const user = c.get("user");
   const s = await db();
@@ -83,6 +98,9 @@ letters.post("/batch", async (c) => {
   for (const it of items) {
     const id = String(it?.id ?? "").trim();
     if (!id) continue;
+    if (!KEY_RE.test(id)) {
+      return c.json({ error: `malformed letter id: ${JSON.stringify(id)}` }, 400);
+    }
     const date = it?.date ? new Date(it.date) : new Date();
     const updated = it?.updated_at ? new Date(it.updated_at) : new Date();
     const res = (await s`

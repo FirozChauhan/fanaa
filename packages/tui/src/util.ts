@@ -45,6 +45,16 @@ export function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "\u2026" : s;
 }
 
+/**
+ * Strip terminal control characters (ESC and the C0 range) from text that
+ * will be rendered — a letter body containing `\x1b[2J` or ANSI color codes
+ * must not be able to redraw/mislead the terminal. Applied to every line
+ * before markdown parsing and to frontmatter fields on render.
+ */
+export function clean(s: string): string {
+  return s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
+}
+
 /** Greedy word wrap; returns lines no longer than width. */
 /**
  * Greedy word wrap; returns lines no longer than width. Splits on spaces,
@@ -105,7 +115,7 @@ export function parseInline(s: string): InlineSeg[] {
  */
 export function wrapBody(body: string, width: number): InlineSeg[][] {
   const out: InlineSeg[][] = [];
-  for (const raw of body.split("\n")) {
+  for (const raw of clean(body).split("\n")) {
     const segs = parseInline(raw);
     if (raw.trim() === "") {
       out.push([{ text: "" }]);
@@ -142,7 +152,9 @@ export function wrapBody(body: string, width: number): InlineSeg[][] {
 // (letter key, width, body length) and share across all call sites.
 const wrapCache = new Map<string, InlineSeg[][]>();
 export function wrapBodyCached(key: string, body: string, width: number): InlineSeg[][] {
-  const ck = `${key}|${width}|${body.length}`;
+  // Key on the body itself (not its length): two same-length bodies would
+  // otherwise share a cache entry and render stale content after an edit.
+  const ck = `${key}|${width}|${body}`;
   let v = wrapCache.get(ck);
   if (!v) {
     if (wrapCache.size > 512) wrapCache.clear();

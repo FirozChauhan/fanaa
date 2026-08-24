@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
-import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate, wrapBodyCached } from "../util";
+import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, clean, truncate, wrapBodyCached } from "../util";
 
 /**
  * A letter, laid out like a real letter: date/time, from/to, subject heading,
@@ -24,8 +24,10 @@ export const LetterView = memo(function LetterView({
   highlightSubject?: boolean;
 }) {
   const m = letter.meta;
-  // Wrap email addresses in angle brackets; names ("ME") stay bare.
-  const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
+  // Wrap email addresses in angle brackets; names ("ME") stay bare. Control
+  // chars (ESC etc.) in frontmatter are stripped so they can't inject into
+  // the terminal.
+  const email = (v: string) => (v.includes("@") ? `<${clean(v)}>` : clean(v));
   const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
   const body = letter.body.replace(/\n+$/, "");
   const bodyLines = wrapBodyCached(letter.key, body, Math.max(20, width - 2));
@@ -55,7 +57,7 @@ export const LetterView = memo(function LetterView({
       <Text>
         <Text color={FAINT}>Subject: </Text>
         <Text bold backgroundColor={highlightSubject ? SEL_BG : undefined} color={GOLD}>
-          {truncate(m.subject || "(no subject)", Math.max(4, width - 11))}
+          {truncate(clean(m.subject || "(no subject)"), Math.max(4, width - 11))}
         </Text>
       </Text>
       <Text color={DIVIDER}>{rule}</Text>

@@ -61,8 +61,24 @@ export function parseDateStamp(s?: string): Date {
   return new Date();
 }
 
+/**
+ * Matches a valid letter key: `YYYY-MM-DD-HHMM` with optional uniqueness
+ * suffix segments (`-2`, `-K7X2P9`, `-K7X2P9-2` — dedup appends a counter
+ * after the hash). Anything else (paths, traversal, junk) is not a key and
+ * must never be treated as one — keys become filesystem paths.
+ */
+export const KEY_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)*$/;
+
+/** True when `key` is a well-formed letter key (see {@link KEY_RE}). */
+export function isValidKey(key: string): boolean {
+  return KEY_RE.test(key);
+}
+
 /** Path for an entry, e.g. ~/.fanaa/entries/2026/08/2026-08-24.md */
 export function entryPath(root: string, key: string): string {
+  // Keys are used as path components — a malformed key could escape the
+  // journal via ../ traversal, or crash join() on an undefined segment.
+  if (!isValidKey(key)) throw new Error(`invalid letter key: ${JSON.stringify(key)}`);
   const [y, m] = key.split("-");
   return join(root, "entries", y, m, `${key}.md`);
 }
@@ -105,7 +121,8 @@ export function parseDateArg(s: string): string | null {
   if (s === "yesterday") return dayKey(new Date(now.getTime() - 86400000));
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (/^\d{2}-\d{2}$/.test(s)) return `${now.getFullYear()}-${s}`;
-  // Exact letter key: YYYY-MM-DD-HHMM with optional uniqueness suffix (-2, -K7X2P9).
-  if (/^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)?$/.test(s)) return s;
+  // Exact letter key: YYYY-MM-DD-HHMM with optional suffix segments
+  // (-2, -K7X2P9, -K7X2P9-2 — same shape KEY_RE enforces elsewhere).
+  if (/^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)*$/.test(s)) return s;
   return null;
 }

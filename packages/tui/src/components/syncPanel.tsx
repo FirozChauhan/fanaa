@@ -4,6 +4,7 @@ import TextInput from "ink-text-input";
 import {
   FanaaApiError,
   loadSyncState,
+  logout,
   requestCode,
   resolveApiUrl,
   runSync,
@@ -197,16 +198,18 @@ export function SyncPanel({
     }
   }, [nameInput, nameCtx, apiUrl, storeRoot, refresh, doSync]);
 
-  /** Sign out: drop the token + name (progress/cursor stay for next login). */
+  /** Sign out: revoke server-side (best-effort), drop the local token+name. */
   const doLogout = useCallback(() => {
     const next = loadSyncState(storeRoot);
+    const token = next.token;
     next.token = "";
     next.email = "";
     next.name = "";
     refresh(next);
     setMessage("signed out \u2014 local letters are untouched");
     setPhase("idle");
-  }, [storeRoot, refresh]);
+    if (token) void logout(apiUrl, token).catch(() => {});
+  }, [storeRoot, refresh, apiUrl]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") process.exit(0);

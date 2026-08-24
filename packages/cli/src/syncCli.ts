@@ -1,4 +1,4 @@
-import { requestCode, verifyCode, setName, loadSyncState, saveSyncState, resolveApiUrl, runSync } from "fanaa-sync";
+import { requestCode, verifyCode, setName, logout, loadSyncState, saveSyncState, resolveApiUrl, runSync } from "fanaa-sync";
 import { journalRoot, fanaaRoot } from "fanaa-core";
 import { promptText } from "./prompt";
 import { dim } from "./render";
@@ -90,13 +90,19 @@ export async function cmdName(argName?: string): Promise<void> {
   }
 }
 
-/** `fanaa logout` — drop the token; local letters are untouched. */
-export function cmdLogout(): void {
+/** `fanaa logout` — revoke the session server-side, drop the local token. */
+export async function cmdLogout(): Promise<void> {
   const store = fanaaRoot();
   const st = loadSyncState(store);
   if (!st.token) {
     console.log("Not signed in.");
     return;
+  }
+  try {
+    await logout(resolveApiUrl(st), st.token);
+  } catch {
+    // Best-effort: the session may already be expired/revoked — dropping the
+    // local token is what actually matters.
   }
   st.token = "";
   saveSyncState(store, st);
