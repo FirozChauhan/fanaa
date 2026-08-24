@@ -5,7 +5,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadSyncState } from "fanaa-sync";
-import { loadLetters, dayCounts, computeStreak, sortLetters, type Letter, type SortMode } from "./data";
+import { loadLetters, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
 import { TimelineList, type TreeRow } from "./components/timelineList";
 import { LetterView } from "./components/letterView";
@@ -223,10 +223,6 @@ export function App() {
   const fIdx = Math.min(idx, Math.max(0, order.length - 1));
   const selected = order[fIdx];
   const tree = useMemo(() => (timeline ? buildTree(order, collapsed) : null), [timeline, order, collapsed]);
-  const stats = useMemo(() => {
-    const counts = dayCounts(letters);
-    return { streak: computeStreak(counts) };
-  }, [letters]);
 
   // Exit cleanly when the terminal dies (stdin EOF, EIO, stdout EPIPE…)
   // so orphaned Ink processes don't busy-loop consuming 100% CPU.
@@ -539,19 +535,8 @@ export function App() {
         <Title />
         <Box flexGrow={1} />
         {syncName && (
-          <>
-            <Text bold color={ACCENT}>
-              {syncName}
-            </Text>
-            <Text color={FAINT}> · </Text>
-          </>
-        )}
-        {stats.streak > 1 && (
-          <Text color={MUTED}>
-            <Text bold color={ACCENT}>
-              {stats.streak}
-            </Text>{" "}
-            day streak
+          <Text bold color={ACCENT}>
+            {syncName}
           </Text>
         )}
       </Box>
