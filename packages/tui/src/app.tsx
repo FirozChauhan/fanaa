@@ -252,7 +252,7 @@ export function App() {
   const [view, setView] = useState<View>("browse");
   // Boot splash — shown on a cold start, skipped on relaunch after the vim
   // handoff (the CLI wrapper sets FANAA_NO_SPLASH for those respawns).
-  const [splash, setSplash] = useState(() => !process.env.FANAA_NO_SPLASH);
+  const [splash, setSplash] = useState(() => process.env.FANAA_NO_SPLASH !== "1");
   const [helpReturn, setHelpReturn] = useState<View>("browse");
   const [letterFull, setLetterFull] = useState(false);
   const [offset, setOffset] = useState(0);
