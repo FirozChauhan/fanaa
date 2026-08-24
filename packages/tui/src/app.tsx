@@ -1,17 +1,17 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot } from "fanaa-core";
-import { loadLetters, type Letter } from "./data";
+import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
 
 type View = "browse" | "letter" | "compose";
 
-const TITLE = "\u2767 FANAA"; // ❧ FANAA
+const TITLE = "FANAA";
 
 function Title() {
   const colors = gradientColors(TITLE, AMBER, GOLD);
@@ -34,9 +34,15 @@ export function App() {
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
 
-  const cols = stdout.columns ?? 80;
-  const rows = stdout.rows ?? 24;
+  // Clamp to sane minima: a 0×0 stdout (pipes, weird PTYs, early frames)
+  // would collapse every layout to nothing.
+  const cols = Math.max(40, stdout.columns ?? 80);
+  const rows = Math.max(12, stdout.rows ?? 24);
   const selected = letters[idx];
+  const stats = useMemo(() => {
+    const counts = dayCounts(letters);
+    return { total: letters.length, streak: computeStreak(counts) };
+  }, [letters]);
 
   /**
    * Hand off to the CLI wrapper: it opens vim on the letter body (git-commit
@@ -67,6 +73,7 @@ export function App() {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
       else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
+      else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
       else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
       return;
     }
@@ -81,6 +88,7 @@ export function App() {
       setSubject("");
       setView("compose");
     } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
+    else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
     else if (input === "r") setLetters(loadLetters());
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
@@ -123,7 +131,7 @@ export function App() {
     return (
       <Box flexDirection="column" height={rows} paddingX={1}>
         <LetterView letter={selected} width={cols - 2} height={bodyH} offset={offset} />
-        <Text color={FAINT}>j/k scroll · e edit (vim) · esc back</Text>
+        <Text color={FAINT}>j/k scroll · e edit · d delete · esc back</Text>
       </Box>
     );
   }
@@ -142,13 +150,23 @@ export function App() {
     <Box flexDirection="column" height={rows}>
       {/* header */}
       <Box paddingX={1} alignItems="center">
-        <Box width={12}>
-          <Title />
-        </Box>
-        <Box flexGrow={1} justifyContent="center">
-          <Text color={MUTED}>letters only you will ever read</Text>
-        </Box>
-        <Box width={12} alignItems="flex-end" />
+        <Title />
+        <Box flexGrow={1} />
+        <Text color={MUTED}>
+          <Text bold color={GOLD}>
+            {stats.total}
+          </Text>{" "}
+          {stats.total === 1 ? "letter" : "letters"}
+          {stats.streak > 1 && (
+            <>
+              {"  "}•{"  "}
+              <Text bold color={ACCENT}>
+                {stats.streak}
+              </Text>{" "}
+              day streak
+            </>
+          )}
+        </Text>
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 
@@ -184,7 +202,8 @@ export function App() {
         <Text color={FAINT}>
           <Text color={MUTED}>j/k</Text> navigate · <Text color={MUTED}>enter</Text> read ·{" "}
           <Text color={MUTED}>a</Text> write · <Text color={MUTED}>e</Text> edit ·{" "}
-          <Text color={MUTED}>r</Text> refresh · <Text color={MUTED}>q</Text> quit
+          <Text color={MUTED}>d</Text> delete · <Text color={MUTED}>r</Text> refresh ·{" "}
+          <Text color={MUTED}>q</Text> quit
         </Text>
       </Box>
     </Box>

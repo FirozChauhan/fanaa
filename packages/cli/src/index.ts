@@ -75,7 +75,7 @@ async function cmdWrite(opts: {
   const root = fanaaRoot();
   const cfg = loadConfig(root);
   let from = opts.from ?? cfg.identity?.default_from ?? gitEmail() ?? "me";
-  let to = opts.to ?? cfg.identity?.default_to ?? "future self";
+  let to = opts.to ?? cfg.identity?.default_to ?? "ME";
   let subject = opts.subject;
 
   if (opts.values) {
@@ -153,6 +153,23 @@ async function cmdEdit(key: string, newBody: string): Promise<void> {
   console.log(`\n\u001b[32m\u2713\u001b[0m edited ${key}${tail}`);
 }
 
+/** Delete a letter and commit the removal. */
+async function cmdDelete(key: string): Promise<void> {
+  const root = fanaaRoot();
+  const p = entryPath(root, key);
+  if (!existsSync(p)) {
+    console.error(`No letter found at ${key}.`);
+    process.exitCode = 1;
+    return;
+  }
+  const { meta } = parseEntry(readFileSync(p, "utf8"));
+  rmSync(p);
+  const subj = meta.subject || "(no subject)";
+  const rev = commitEntry(root, p, `delete: ${subj}`);
+  const tail = rev ? `  [git: ${rev}]` : "";
+  console.log(`\u001b[31m\u2717\u001b[0m deleted ${key} (${subj})${tail}`);
+}
+
 async function cmdRead(arg: string): Promise<void> {
   const root = fanaaRoot();
   const exact = /^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(arg);
@@ -181,7 +198,7 @@ function cmdWhoami(): void {
   const root = fanaaRoot();
   const cfg = loadConfig(root);
   const from = cfg.identity?.default_from ?? gitEmail() ?? "me";
-  const to = cfg.identity?.default_to ?? "future self";
+  const to = cfg.identity?.default_to ?? "ME";
   console.log(`From: ${from}`);
   console.log(`To:   ${to}`);
   console.log(dim("Use `fanaa -v` to change."));
@@ -231,7 +248,10 @@ async function main(): Promise<void> {
         // and exits; we open vim on a temp file, then write/commit the entry.
         const raw = existsSync(pending) ? readFileSync(pending, "utf8") : "";
         rmSync(pending, { force: true });
-        if (raw.startsWith("EDIT:")) {
+        if (raw.startsWith("DELETE:")) {
+          const key = raw.slice(7).trim();
+          await cmdDelete(key);
+        } else if (raw.startsWith("EDIT:")) {
           const key = raw.slice(5).trim();
           const p = entryPath(root, key);
           if (!existsSync(p)) {

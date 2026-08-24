@@ -46,7 +46,9 @@ export function LetterList({
         const multi = rows.filter((r) => r.key.slice(0, 10) === base).length > 1;
         const label = dayLabel(base, time, multi);
         const subject = truncate(l.meta.subject || "(no subject)", subjW);
-        const trail = truncate(`\u2192 ${l.meta.to ?? ""}`, trailW);
+        const to = l.meta.to?.trim();
+        // Default recipient is ME — only show the arrow when it's someone else.
+        const trail = to && to.toLowerCase() !== "me" ? truncate(`\u2192 ${to}`, trailW) : "";
         return (
           <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
             <Text color={sel ? ACCENT : FAINT}>{sel ? "\u25b8 " : "  "}</Text>

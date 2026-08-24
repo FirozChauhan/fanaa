@@ -19,10 +19,9 @@ bun link          # makes `fanaa` available everywhere
 ## Usage
 
 ```bash
-fanaa                    # asks for a subject, opens the built-in full-screen
-                         # editor — no vim, no $EDITOR needed
-fanaa tui                # full-window TUI; `a` composes a letter (vim opens
-                         # on the body), `e` edits one (ditto)
+fanaa                    # asks for a subject, opens vim on the body
+fanaa tui                # full-window TUI: `a` compose, `e` edit, `d` delete
+                         # (vim opens on the body; letters addressed to ME)
 fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
 fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter
@@ -42,7 +41,11 @@ file to abort. Set `FANAA_EDITOR=nano` (or any editor) to override. The raw
 
 Every capture writes a fresh letter file — nothing is ever merged or
 appended; editing a letter rewrites its body in place and commits an
-`edit: <subject>` revision.
+`edit: <subject>` revision, and deleting one commits a `delete: <subject>`
+revision (recoverable with git).
+
+Letters are addressed to **ME** by default (`fanaa -v` to change your
+identity; `--to` overrides one letter at a time).
 
 ## Layout
 
