@@ -34,9 +34,7 @@ export function LetterList({
   height: number;
 }) {
   const rows = letters.slice(0, height);
-  const labelW = 11;
-  const trailW = Math.max(0, Math.min(20, Math.floor(width / 3)));
-  const subjW = Math.max(6, width - 2 - labelW - (trailW ? trailW + 2 : 0));
+  const subjW = Math.max(6, width - 3); // marker(2) + label + ": "
   return (
     <>
       {rows.map((l, i) => {
@@ -45,25 +43,16 @@ export function LetterList({
         const time = l.key.length > 10 ? l.key.slice(11, 15) : "";
         const multi = rows.filter((r) => r.key.slice(0, 10) === base).length > 1;
         const label = dayLabel(base, time, multi);
-        const subject = truncate(l.meta.subject || "(no subject)", subjW);
-        const to = l.meta.to?.trim();
-        // Default recipient is ME — only show the arrow when it's someone else.
-        const trail = to && to.toLowerCase() !== "me" ? truncate(`\u2192 ${to}`, trailW) : "";
+        const subject = truncate(l.meta.subject || "(no subject)", Math.max(4, subjW - label.length));
         return (
           <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
             <Text color={sel ? ACCENT : FAINT}>{sel ? "\u25b8 " : "  "}</Text>
             <Text color={sel ? GOLD : MUTED} bold={sel}>
-              {label.padEnd(labelW)}
+              {label}
             </Text>
             <Text color={sel ? GOLD : PAPER} bold={sel}>
-              {subject}
+              : {subject}
             </Text>
-            {trail && (
-              <Text color={FAINT}>
-                {"  "}
-                {trail}
-              </Text>
-            )}
           </Text>
         );
       })}

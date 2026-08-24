@@ -3,21 +3,28 @@ import { join } from "node:path";
 import React, { useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
-import { fanaaRoot } from "fanaa-core";
+import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
+
+// The wrapper passes the active journal category; entries live in its repo.
+const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
+const STORE = fanaaRoot();
+const JOURNAL = journalRoot(STORE, CATEGORY);
 
 type View = "browse" | "letter" | "compose";
 
 const TITLE = "FANAA";
 
 function Title() {
-  const colors = gradientColors(TITLE, AMBER, GOLD);
+  // Show the journal category next to the logo when it's not the default.
+  const title = CATEGORY === "fanaa" ? TITLE : `${TITLE} \u00b7 ${CATEGORY}`;
+  const colors = gradientColors(title, AMBER, GOLD);
   return (
     <Text bold>
-      {[...TITLE].map((c, i) => (
+      {[...title].map((c, i) => (
         <Text key={i} color={c === " " ? undefined : colors[i]}>
           {c}
         </Text>
@@ -28,7 +35,7 @@ function Title() {
 
 export function App() {
   const { stdout } = useStdout();
-  const [letters, setLetters] = useState<Letter[]>(() => loadLetters());
+  const [letters, setLetters] = useState<Letter[]>(() => loadLetters(JOURNAL));
   const [idx, setIdx] = useState(0);
   const [view, setView] = useState<View>("browse");
   const [offset, setOffset] = useState(0);
@@ -51,7 +58,7 @@ export function App() {
    *   edit letter: EDIT:<key>
    */
   const handOff = (payload: string) => {
-    writeFileSync(join(fanaaRoot(), ".tui-pending"), payload);
+    writeFileSync(join(STORE, ".tui-pending"), payload);
     process.exit(66);
   };
 
@@ -89,7 +96,7 @@ export function App() {
       setView("compose");
     } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
     else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
-    else if (input === "r") setLetters(loadLetters());
+    else if (input === "r") setLetters(loadLetters(JOURNAL));
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 

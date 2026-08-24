@@ -10,12 +10,12 @@ export interface Letter {
   body: string;
 }
 
-export function loadLetters(): Letter[] {
-  const root = fanaaRoot();
+export function loadLetters(root?: string): Letter[] {
+  const r = root ?? fanaaRoot();
   const glob = new Bun.Glob("entries/**/*.md");
   const out: Letter[] = [];
-  for (const f of glob.scanSync({ cwd: root, absolute: false, onlyFiles: true })) {
-    const text = readFileSync(join(root, f), "utf8");
+  for (const f of glob.scanSync({ cwd: r, absolute: false, onlyFiles: true })) {
+    const text = readFileSync(join(r, f), "utf8");
     const { meta, body } = parseEntry(text);
     const key = basename(f).replace(/\.md$/, "");
     out.push({ key, date: parseDateStamp(meta.date), meta, body });

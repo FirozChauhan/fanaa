@@ -6,6 +6,10 @@ export interface FanaaConfig {
     default_from?: string;
     default_to?: string;
   };
+  /** Which journal letters go to: "fanaa" (default) or a named category. */
+  journal?: {
+    category?: string;
+  };
 }
 
 export function loadConfig(root: string): FanaaConfig {
@@ -23,6 +27,9 @@ export function saveConfig(root: string, cfg: FanaaConfig): void {
   lines.push("[identity]");
   lines.push(`default_from = ${tomlQuote(cfg.identity?.default_from ?? "")}`);
   lines.push(`default_to = ${tomlQuote(cfg.identity?.default_to ?? "")}`);
+  lines.push("");
+  lines.push("[journal]");
+  lines.push(`category = ${tomlQuote(cfg.journal?.category ?? "fanaa")}`);
   writeFileSync(configPath(root), lines.join("\n") + "\n", { mode: 0o600 });
 }
 

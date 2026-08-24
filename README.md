@@ -25,7 +25,8 @@ fanaa tui                # full-window TUI: `a` compose, `e` edit, `d` delete
 fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
 fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter
-fanaa -v                 # set from / to / subject (from & to become defaults)
+fanaa -v                 # set from / to / category / subject (become defaults)
+fanaa --cat work         # write to the "work" journal (default category: fanaa)
 fanaa yesterday          # read letters as email (today, YYYY-MM-DD, MM-DD)
 fanaa ls                 # list recent letters
 fanaa whoami             # show who you write as, and to
@@ -46,6 +47,21 @@ revision (recoverable with git).
 
 Letters are addressed to **ME** by default (`fanaa -v` to change your
 identity; `--to` overrides one letter at a time).
+
+## Categories
+
+Letters belong to a **journal category** — one git repo per category.
+The default category is `fanaa` (letters live in `~/.fanaa/`); pick
+another with `fanaa -v` (the category prompt) or for one write with
+`fanaa --cat work`. Category journals live in `~/.fanaa/cats/<name>/`,
+each with its own history:
+
+```
+~/.fanaa/
+├── config.toml                      # identity + active category
+├── entries/2026/08/…                # default "fanaa" journal
+└── cats/work/entries/2026/08/…      # the "work" journal (own git repo)
+```
 
 ## Layout
 

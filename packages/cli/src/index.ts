@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, basename, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
-import { dayKey, entryPath, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
+import { dayKey, entryPath, journalRoot, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
 import { composeLines } from "./editor";
 import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
 import { commitEntry, gitEmail } from "./git";
@@ -26,9 +26,10 @@ Usage:
   fanaa tui             the beautiful full-screen TUI
   fanaa ls              list recent letters
   fanaa whoami          show who you write as, and to
-  fanaa -v              set from/to/subject (from/to become your defaults)
+  fanaa -v              set from/to/subject/category (become your defaults)
   fanaa --date YYYY-MM-DD   backdate a letter
   fanaa --from X --to Y     write with overrides
+  fanaa --cat NAME          write to a category journal (default: fanaa)
   fanaa -s "subject"        set the subject, skip the prompt
 
 Piping:
@@ -63,32 +64,50 @@ function runEditor(file: string): void {
 
 type BodyMode = "editor" | "lines" | "arg" | "stdin";
 
+/** Configured journal category ("fanaa" unless changed with -v or --cat). */
+function activeCategory(flag?: string): string {
+  if (flag?.trim()) return flag.trim();
+  return loadConfig(fanaaRoot()).journal?.category?.trim() || "fanaa";
+}
+
+/** Root of the active journal's repo (store root for "fanaa", cats/<name>/ otherwise). */
+function journalStore(category: string): string {
+  return journalRoot(fanaaRoot(), category);
+}
+
 async function cmdWrite(opts: {
   dateKey: string;
   from?: string;
   to?: string;
   subject?: string;
+  category?: string;
   values: boolean;
   mode: BodyMode;
   argBody?: string;
 }): Promise<void> {
-  const root = fanaaRoot();
-  const cfg = loadConfig(root);
+  const store = fanaaRoot();
+  const cfg = loadConfig(store);
   let from = opts.from ?? cfg.identity?.default_from ?? gitEmail() ?? "me";
   let to = opts.to ?? cfg.identity?.default_to ?? "ME";
   let subject = opts.subject;
+  let category = activeCategory(opts.category);
 
   if (opts.values) {
     from = await promptText("From (your default until you change it)", from);
     to = await promptText("To", to);
+    category = await promptText("Category (journal name)", category);
     subject = await promptText("Subject");
-    saveConfig(root, { ...cfg, identity: { default_from: from, default_to: to } });
+    saveConfig(store, {
+      ...cfg,
+      identity: { default_from: from, default_to: to },
+      journal: { category },
+    });
   } else if (subject === undefined) {
     // Never prompt when the body comes from stdin — those lines are the letter.
     if (opts.mode !== "stdin") subject = await promptText("Subject");
   }
   subject = subject || "";
-
+  const root = journalStore(category);
   // One letter = one file: key YYYY-MM-DD-HHMM, deduped with -2, -3…
   const now = new Date();
   let key = stampKey(opts.dateKey, now);
@@ -132,8 +151,8 @@ async function cmdWrite(opts: {
 }
 
 /** Rewrite an existing letter's body; frontmatter (date/from/to/subject) is kept. */
-async function cmdEdit(key: string, newBody: string): Promise<void> {
-  const root = fanaaRoot();
+async function cmdEdit(key: string, newBody: string, category = activeCategory()): Promise<void> {
+  const root = journalStore(category);
   const p = entryPath(root, key);
   if (!existsSync(p)) {
     console.error(`No letter found at ${key}.`);
@@ -154,8 +173,8 @@ async function cmdEdit(key: string, newBody: string): Promise<void> {
 }
 
 /** Delete a letter and commit the removal. */
-async function cmdDelete(key: string): Promise<void> {
-  const root = fanaaRoot();
+async function cmdDelete(key: string, category = activeCategory()): Promise<void> {
+  const root = journalStore(category);
   const p = entryPath(root, key);
   if (!existsSync(p)) {
     console.error(`No letter found at ${key}.`);
@@ -171,7 +190,7 @@ async function cmdDelete(key: string): Promise<void> {
 }
 
 async function cmdRead(arg: string): Promise<void> {
-  const root = fanaaRoot();
+  const root = journalStore(activeCategory());
   const exact = /^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(arg);
   const glob = new Bun.Glob("entries/**/*.md");
   const hits: { key: string; text: string }[] = [];
@@ -195,12 +214,14 @@ async function cmdRead(arg: string): Promise<void> {
 }
 
 function cmdWhoami(): void {
-  const root = fanaaRoot();
-  const cfg = loadConfig(root);
+  const store = fanaaRoot();
+  const cfg = loadConfig(store);
   const from = cfg.identity?.default_from ?? gitEmail() ?? "me";
   const to = cfg.identity?.default_to ?? "ME";
+  const category = cfg.journal?.category?.trim() || "fanaa";
   console.log(`From: ${from}`);
   console.log(`To:   ${to}`);
+  console.log(`Cat:  ${category}`);
   console.log(dim("Use `fanaa -v` to change."));
 }
 
@@ -210,6 +231,7 @@ async function main(): Promise<void> {
   let from: string | undefined;
   let to: string | undefined;
   let subject: string | undefined;
+  let category: string | undefined;
   let dateArg: string | undefined;
   const positional: string[] = [];
 
@@ -218,6 +240,7 @@ async function main(): Promise<void> {
     if (a === "-v" || a === "--values") values = true;
     else if (a === "--from") from = args[++i];
     else if (a === "--to") to = args[++i];
+    else if (a === "--cat" || a === "--category") category = args[++i];
     else if (a === "-s" || a === "--subject") subject = args[++i];
     else if (a === "--date") dateArg = args[++i];
     else if (a === "-h" || a === "--help") {
@@ -231,7 +254,6 @@ async function main(): Promise<void> {
     } else positional.push(a);
   }
 
-  const root = fanaaRoot();
   const cmd = positional[0];
   const dateKey = dateArg ? (parseDateArg(dateArg) ?? dayKey(new Date())) : dayKey(new Date());
 
@@ -239,9 +261,15 @@ async function main(): Promise<void> {
     // Loop: the TUI fully exits before the editor runs (terminal handoff), then restarts.
     // Exit 66 = "compose requested" (subject stashed in .tui-pending).
     const tuiEntry = join(import.meta.dir, "../../tui/src/index.tsx");
-    const pending = join(root, ".tui-pending");
+    const store = fanaaRoot();
+    const cat = activeCategory();
+    const root = journalStore(cat);
+    const pending = join(store, ".tui-pending");
     while (true) {
-      const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
+      const res = spawnSync("bun", ["run", tuiEntry], {
+        stdio: "inherit",
+        env: { ...process.env, FANAA_CATEGORY: cat },
+      });
       if (res.status === 66) {
         // The TUI hands the letter off to vim (git-commit style): it writes
         // the subject (new letter) or "EDIT:<key>" (rewrite) to .tui-pending
@@ -250,7 +278,7 @@ async function main(): Promise<void> {
         rmSync(pending, { force: true });
         if (raw.startsWith("DELETE:")) {
           const key = raw.slice(7).trim();
-          await cmdDelete(key);
+          await cmdDelete(key, cat);
         } else if (raw.startsWith("EDIT:")) {
           const key = raw.slice(5).trim();
           const p = entryPath(root, key);
@@ -264,7 +292,7 @@ async function main(): Promise<void> {
           runEditor(tmp);
           const newBody = readFileSync(tmp, "utf8").replace(/\n+$/, "");
           if (newBody !== body.replace(/\n+$/, "")) {
-            await cmdEdit(key, newBody);
+            await cmdEdit(key, newBody, cat);
           } else {
             console.log("No changes — nothing saved.");
           }
@@ -274,7 +302,7 @@ async function main(): Promise<void> {
           writeFileSync(tmp, "");
           runEditor(tmp);
           const body = readFileSync(tmp, "utf8");
-          await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false });
+          await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false, category: cat });
         }
         continue;
       }
@@ -285,7 +313,7 @@ async function main(): Promise<void> {
     return;
   }
   if (cmd === "ls" || cmd === "list") {
-    listEntries(root);
+    listEntries(journalStore(activeCategory(category)));
     return;
   }
   if (cmd === "whoami") {
@@ -299,7 +327,7 @@ async function main(): Promise<void> {
       : process.stdin.isTTY
         ? "lines"
         : "stdin";
-    await cmdWrite({ dateKey, from, to, subject, values, mode, argBody });
+    await cmdWrite({ dateKey, from, to, subject, category, values, mode, argBody });
     return;
   }
   if (cmd !== undefined) {
@@ -315,7 +343,7 @@ async function main(): Promise<void> {
 
   // Plain `fanaa`: always the built-in full-screen editor (TTY), stdin when piped.
   const mode: BodyMode = process.stdin.isTTY ? "editor" : "stdin";
-  await cmdWrite({ dateKey, from, to, subject, values, mode });
+  await cmdWrite({ dateKey, from, to, subject, category, values, mode });
 }
 
 main().catch((err) => {
