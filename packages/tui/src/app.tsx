@@ -210,6 +210,24 @@ export function App() {
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
+  // Layout numbers are view-independent (the empty/help/compose returns below
+  // must NOT skip them — hooks must run on every render or React throws
+  // "Rendered fewer hooks than expected").
+  const inLetter = view === "letter";
+  const full = inLetter && letterFull;
+  const listW = Math.min(42, Math.floor(cols * 0.38));
+  const showPreview = inLetter || cols >= 62;
+  const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
+  const listH = Math.max(3, rows - 4);
+
+  // Body line indices that contain a #"…"# highlight. Must use the same wrap
+  // width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
+  const hlLines = useMemo(() => {
+    if (!selected) return [];
+    const lines = wrapBody(selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
+    return lines.map((ln, i) => (ln.some((s) => s.underline) ? i : -1)).filter((i) => i >= 0);
+  }, [selected, previewW]);
+
   if (view === "help") {
     return (
       <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
@@ -253,20 +271,6 @@ export function App() {
     );
   }
 
-  const inLetter = view === "letter";
-  const full = inLetter && letterFull;
-  const listW = Math.min(42, Math.floor(cols * 0.38));
-  const showPreview = inLetter || cols >= 62;
-  const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
-  const listH = Math.max(3, rows - 4);
-
-  // Body line indices that contain a #"…"# highlight. Must use the same wrap
-  // width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
-  const hlLines = useMemo(() => {
-    if (!selected) return [];
-    const lines = wrapBody(selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
-    return lines.map((ln, i) => (ln.some((s) => s.underline) ? i : -1)).filter((i) => i >= 0);
-  }, [selected, previewW]);
   const listTop = Math.min(Math.max(0, idx - listH + 1), Math.max(0, idx));
   const visible = letters.slice(listTop, listTop + listH);
   const selInList = idx - listTop;
