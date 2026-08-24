@@ -1,4 +1,4 @@
-import { requestCode, verifyCode, loadSyncState, saveSyncState, resolveApiUrl, runSync } from "fanaa-sync";
+import { requestCode, verifyCode, setName, loadSyncState, saveSyncState, resolveApiUrl, runSync } from "fanaa-sync";
 import { journalRoot, fanaaRoot } from "fanaa-core";
 import { promptText } from "./prompt";
 import { dim } from "./render";
@@ -34,12 +34,60 @@ export async function cmdLogin(argEmail?: string): Promise<void> {
   }
   const code = (await promptText("6-digit code")).trim();
 
-  const { token } = await verifyCode(apiUrl, email, code, req.verification_id);
+  const { token, user } = await verifyCode(apiUrl, email, code, req.verification_id);
   st.apiUrl = apiUrl;
   st.email = email;
   st.token = token;
+
+  // First sign-in: ask for the full name (shown in the TUI header). It is
+  // optional — edit it later with `fanaa name "…"`.
+  if (!user.name) {
+    const name = (await promptText("Full name (shown in the TUI header)", "")).trim();
+    if (name) {
+      try {
+        const updated = await setName(apiUrl, token, name);
+        st.name = updated.user.name;
+        console.log(`\u001b[32m\u2713\u001b[0m hello, ${updated.user.name} — nice to meet you`);
+      } catch {
+        // Name is optional — the account still works without it.
+      }
+    }
+  } else {
+    st.name = user.name;
+  }
+
   saveSyncState(store, st);
   console.log(`\u001b[32m\u2713\u001b[0m signed in as ${email} — try \`fanaa sync\``);
+}
+
+/**
+ * `fanaa name [Full Name]` — set/edit the account's full name (display
+ * only, not a username; shown in the TUI header). No arg → prompt; empty
+ * name clears it.
+ */
+export async function cmdName(argName?: string): Promise<void> {
+  const store = fanaaRoot();
+  const st = loadSyncState(store);
+  if (!st.token) {
+    console.log("Not signed in — run \u001b[1mfanaa login\u001b[0m first.");
+    return;
+  }
+  const apiUrl = resolveApiUrl(st);
+  const name = (argName ?? (await promptText("Full name", st.name))).trim();
+  try {
+    const updated = await setName(apiUrl, st.token, name);
+    st.name = updated.user.name;
+    saveSyncState(store, st);
+    console.log(name ? `\u001b[32m\u2713\u001b[0m name set to: ${name}` : "Name cleared.");
+  } catch (err) {
+    console.log(
+      err instanceof Error && /unauthorized/i.test(err.message)
+        ? "Session expired — run \u001b[1mfanaa login\u001b[0m again."
+        : err instanceof Error
+          ? err.message
+          : String(err),
+    );
+  }
 }
 
 /** `fanaa logout` — drop the token; local letters are untouched. */

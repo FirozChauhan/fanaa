@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { fanaaRoot, journalRoot } from "fanaa-core";
+import { loadSyncState } from "fanaa-sync";
 import { loadLetters, dayCounts, computeStreak, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
 import { TimelineList, type TreeRow } from "./components/timelineList";
@@ -191,6 +192,12 @@ export function App() {
   // read stays stale until some keystroke forces a re-render. Re-render on
   // resize so the layout follows the window immediately.
   const [dims, setDims] = useState({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
+  // The signed-in account's full name (from the shared sync state) — shown in
+  // the topbar; the cloud panel refreshes it via onStateChange.
+  const [syncName, setSyncName] = useState(() => {
+    const st = loadSyncState(STORE);
+    return st.token ? st.name : "";
+  });
   useEffect(() => {
     const onResize = () => setDims({ rows: stdout.rows ?? 24, cols: stdout.columns ?? 80 });
     stdout.on("resize", onResize);
@@ -490,6 +497,10 @@ export function App() {
             setLetters(loadLetters(JOURNAL));
             setIdx(0);
           }}
+          onStateChange={() => {
+            const st = loadSyncState(STORE);
+            setSyncName(st.token ? st.name : "");
+          }}
         />
       </Box>
     );
@@ -527,6 +538,14 @@ export function App() {
       <Box paddingX={1} alignItems="center">
         <Title />
         <Box flexGrow={1} />
+        {syncName && (
+          <>
+            <Text bold color={ACCENT}>
+              {syncName}
+            </Text>
+            <Text color={FAINT}> · </Text>
+          </>
+        )}
         <Text color={MUTED}>
           <Text bold color={GOLD}>
             {stats.total}

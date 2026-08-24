@@ -98,18 +98,19 @@ auth.post("/verify", async (c) => {
     await s`DELETE FROM auth_codes WHERE email = ${email}`;
   }
 
-  const user = (await s`SELECT id FROM users WHERE email = ${email}`) as { id: string }[];
+  const user = (await s`SELECT id, name FROM users WHERE email = ${email}`) as { id: string; name: string | null }[];
   const userId =
     user.length > 0
       ? user[0].id
       : ((await s`INSERT INTO users (email) VALUES (${email}) RETURNING id`) as { id: string }[])[0].id;
+  const name = user.length > 0 ? (user[0].name ?? "") : "";
 
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000);
   await s`INSERT INTO sessions (token, user_id, expires_at) VALUES (${token}, ${userId}, ${expiresAt})`;
 
-  return c.json({ token, user: { id: userId, email } });
+  return c.json({ token, user: { id: userId, email, name } });
 });
 
 /** Bearer-token middleware: resolves the session to a User, else 401. */
@@ -125,3 +126,16 @@ export const requireUser: MiddlewareHandler<ApiEnv> = async (c, next) => {
   c.set("user", { id: rows[0].id, email: rows[0].email });
   await next();
 };
+
+/**
+ * POST /auth/name  { name }  (Bearer)
+ * Sets the account's full name (shown in the TUI header). Plain text, no
+ * formatting — it is a display name, not a username. Empty clears it.
+ */
+auth.post("/name", requireUser, async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const name = String(body?.name ?? "").trim().slice(0, 80);
+  const u = c.get("user");
+  await (await db())`UPDATE users SET name = ${name} WHERE id = ${u.id}`;
+  return c.json({ ok: true, user: { id: u.id, email: u.email, name } });
+});

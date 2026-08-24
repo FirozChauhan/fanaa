@@ -34,6 +34,8 @@ export interface JournalSync {
 export interface SyncState {
   apiUrl: string;
   email: string;
+  /** The account's full name (display only — shown in the TUI header). */
+  name: string;
   /** 64-hex session token; empty string = signed out. */
   token: string;
   journals: Record<string, JournalSync>;
@@ -42,6 +44,7 @@ export interface SyncState {
 const DEFAULTS = {
   apiUrl: "http://localhost:8787",
   email: "",
+  name: "",
   token: "",
 } as const;
 
@@ -62,11 +65,12 @@ export function loadSyncState(root: string): SyncState {
     return {
       apiUrl: typeof raw.apiUrl === "string" ? raw.apiUrl : DEFAULTS.apiUrl,
       email: typeof raw.email === "string" ? raw.email : DEFAULTS.email,
+      name: typeof raw.name === "string" ? raw.name : DEFAULTS.name,
       token: typeof raw.token === "string" ? raw.token : DEFAULTS.token,
       journals: raw.journals && typeof raw.journals === "object" ? (raw.journals as Record<string, JournalSync>) : {},
     };
   } catch {
-    return { apiUrl: DEFAULTS.apiUrl, email: "", token: "", journals: {} };
+    return { apiUrl: DEFAULTS.apiUrl, email: "", name: "", token: "", journals: {} };
   }
 }
 

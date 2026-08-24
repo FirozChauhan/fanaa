@@ -12,7 +12,7 @@ import { listEntries } from "./list";
 import { fanaaRoot } from "fanaa-core";
 import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
-import { cmdLogin, cmdLogout, cmdSync } from "./syncCli";
+import { cmdLogin, cmdLogout, cmdName, cmdSync } from "./syncCli";
 import { recordDelete } from "fanaa-sync";
 
 /**
@@ -43,6 +43,7 @@ Usage:
   fanaa ls              list recent letters
   fanaa whoami          show who you write as, and to
   fanaa login [email]   sign in for cloud sync (email code)
+  fanaa name [name]     set/edit your full name (shown in the TUI header)
   fanaa logout          forget the session token
   fanaa sync            push local letters, pull cloud changes
   fanaa -v              set from/to/subject/category (become your defaults)
@@ -364,6 +365,10 @@ async function main(): Promise<void> {
   }
   if (cmd === "logout") {
     cmdLogout();
+    return;
+  }
+  if (cmd === "name") {
+    await cmdName(positional[1]);
     return;
   }
   if (cmd === "sync") {

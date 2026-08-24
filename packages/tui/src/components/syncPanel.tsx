@@ -8,6 +8,7 @@ import {
   resolveApiUrl,
   runSync,
   saveSyncState,
+  setName,
   verifyCode,
 } from "fanaa-sync";
 import { ACCENT, FAINT, GOLD, MUTED, PAPER } from "../util";
@@ -24,7 +25,8 @@ import { ACCENT, FAINT, GOLD, MUTED, PAPER } from "../util";
  * happened. `esc` always takes you back to the journal.
  */
 
-type Phase = "idle" | "busy" | "email" | "code";
+type Phase = "idle" | "busy" | "email" | "code" | "name";
+type NameCtx = "signup" | "edit";
 
 const GLYPH = "\u26a1"; // ⚡ cloud-with-flash, printed in the title
 
@@ -34,6 +36,7 @@ export function SyncPanel({
   category,
   onClose,
   onSynced,
+  onStateChange,
 }: {
   storeRoot: string;
   journalRoot: string;
@@ -41,12 +44,16 @@ export function SyncPanel({
   onClose: () => void;
   /** Fired after a sync round finishes writing letters (lets the app reload). */
   onSynced: () => void;
+  /** Fired after any session-state change (login/logout/name) — header updates. */
+  onStateChange?: () => void;
 }) {
   const [state, setState] = useState(() => loadSyncState(storeRoot));
   const [phase, setPhase] = useState<Phase>("idle");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [verificationId, setVerificationId] = useState<string | undefined>(undefined);
+  const [nameInput, setNameInput] = useState("");
+  const [nameCtx, setNameCtx] = useState<NameCtx>("signup");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,8 +65,9 @@ export function SyncPanel({
     (next: typeof state) => {
       saveSyncState(storeRoot, next);
       setState(next);
+      onStateChange?.();
     },
-    [storeRoot],
+    [storeRoot, onStateChange],
   );
 
   /** Fire a full sync round; updates the panel's status + reloads letters. */
@@ -110,20 +118,29 @@ export function SyncPanel({
     }
   }, [apiUrl]);
 
-  /** Verify the code, persist the session, then sync immediately. */
+  /** Verify the code, persist the session, then ask for the name (first sign-in) or sync. */
   const finishLogin = useCallback(async (addr: string, verificationId: string | undefined, c: string) => {
     setPhase("busy");
     setError(null);
     setMessage("verifying\u2026");
     try {
-      const { token } = await verifyCode(apiUrl, addr, c, verificationId);
+      const { token, user } = await verifyCode(apiUrl, addr, c, verificationId);
       const next = loadSyncState(storeRoot);
       next.apiUrl = apiUrl;
       next.email = addr;
       next.token = token;
+      next.name = user.name ?? "";
       refresh(next);
       setMessage(`\u2713 signed in as ${addr}`);
-      await doSync();
+      if (!next.name) {
+        // Brand-new account — capture the full name before the first sync.
+        setNameInput("");
+        setNameCtx("signup");
+        setPhase("name");
+      } else {
+        setPhase("idle");
+        await doSync();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setMessage(null);
@@ -131,20 +148,57 @@ export function SyncPanel({
     }
   }, [apiUrl, storeRoot, refresh, doSync]);
 
-  /** Sign out: drop the token (progress/cursor stay for next login). */
+  /** Save the full name (sign-up or edit); then finish the sign-up sync. */
+  const saveName = useCallback(async () => {
+    const trimmed = nameInput.trim().slice(0, 80);
+    setPhase("busy");
+    setError(null);
+    setMessage("saving name\u2026");
+    try {
+      const st = loadSyncState(storeRoot);
+      const updated = await setName(apiUrl, st.token, trimmed);
+      st.name = updated.user.name;
+      refresh(st);
+      setMessage(trimmed ? `\u2713 hello, ${trimmed}` : "name cleared");
+      setPhase("idle");
+      if (nameCtx === "signup") await doSync();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setMessage(null);
+      setPhase("idle");
+    }
+  }, [nameInput, nameCtx, apiUrl, storeRoot, refresh, doSync]);
+
+  /** Sign out: drop the token + name (progress/cursor stay for next login). */
   const doLogout = useCallback(() => {
     const next = loadSyncState(storeRoot);
     next.token = "";
     next.email = "";
+    next.name = "";
     refresh(next);
     setMessage("signed out \u2014 local letters are untouched");
     setPhase("idle");
   }, [storeRoot, refresh]);
 
   useInput((input, key) => {
-    if (phase === "email" || phase === "code") return; // TextInput owns these keys
-    if (phase === "busy") return; // a sync/login is in flight
     if (key.ctrl && input === "c") process.exit(0);
+    if (phase === "email" || phase === "code") {
+      // TextInput owns typing; esc cancels back to the status view.
+      if (key.escape) {
+        setPhase("idle");
+        setError(null);
+      }
+      return;
+    }
+    if (phase === "name") {
+      // esc skips (sign-up: name is optional) or cancels (edit keeps old).
+      if (key.escape) {
+        setPhase("idle");
+        if (nameCtx === "signup") void doSync();
+      }
+      return;
+    }
+    if (phase === "busy") return; // a sync/login is in flight
     if (key.escape || input === "q") {
       onClose();
     } else if (!signedIn && (input === "l" || key.return)) {
@@ -158,6 +212,12 @@ export function SyncPanel({
       void doSync();
     } else if (signedIn && input === "o") {
       doLogout();
+    } else if (signedIn && input === "n") {
+      setNameInput(state.name);
+      setNameCtx("edit");
+      setError(null);
+      setMessage("edit your full name");
+      setPhase("name");
     }
   });
 
@@ -230,6 +290,38 @@ export function SyncPanel({
     );
   }
 
+  if (phase === "name") {
+    return (
+      <Box flexDirection="column" height={14} paddingX={4} paddingTop={2}>
+        <Text bold color={GOLD}>
+          {GLYPH} YOUR NAME
+        </Text>
+        <Text color={MUTED}>
+          {nameCtx === "signup" ? "what should the TUI header call you?" : "edit your full name"}
+        </Text>
+        <Box marginTop={1}>
+          <Text bold color={ACCENT}>
+            {"\u276f"} {" "}
+          </Text>
+          <TextInput
+            value={nameInput}
+            onChange={setNameInput}
+            onSubmit={() => void saveName()}
+            placeholder={nameCtx === "signup" ? "(skip — no name)" : "(clear)"}
+          />
+        </Box>
+        <Text color={FAINT}>
+          {nameCtx === "signup" ? "enter = save (optional) · esc = skip" : "enter = save · esc = cancel"}
+        </Text>
+        {error && (
+          <Text color="#e07a5f">
+            {"\u2717"} {error}
+          </Text>
+        )}
+      </Box>
+    );
+  }
+
   // ----- status + actions -----
   return (
     <Box flexDirection="column" paddingX={4} paddingTop={2}>
@@ -240,7 +332,11 @@ export function SyncPanel({
         <Text>
           <Text color={MUTED}>status </Text>
           <Text color={signedIn ? ACCENT : PAPER}>
-            {signedIn ? `signed in as ${state.email}` : "not signed in"}
+            {signedIn
+              ? state.name
+                ? `signed in as ${state.name} (${state.email})`
+                : `signed in as ${state.email}`
+              : "not signed in"}
           </Text>
         </Text>
         <Text>
@@ -264,6 +360,10 @@ export function SyncPanel({
             <Text>
               <Text bold color={ACCENT}>p</Text>
               <Text color={MUTED}>  sync now</Text>
+            </Text>
+            <Text>
+              <Text bold color={ACCENT}>n</Text>
+              <Text color={MUTED}>  edit name</Text>
             </Text>
             <Text>
               <Text bold color={ACCENT}>o</Text>

@@ -80,8 +80,20 @@ export function verifyCode(
   email: string,
   code: string,
   verificationId?: string,
-): Promise<{ token: string; user: { id: string; email: string } }> {
+): Promise<{ token: string; user: { id: string; email: string; name: string } }> {
   return api(apiUrl, "/auth/verify", { method: "POST", body: { email, code, verification_id: verificationId } });
+}
+
+/**
+ * POST /auth/name — sets the account's full name (display only, not a
+ * username). Returns the updated user.
+ */
+export function setName(
+  apiUrl: string,
+  token: string,
+  name: string,
+): Promise<{ ok: true; user: { id: string; email: string; name: string } }> {
+  return api(apiUrl, "/auth/name", { method: "POST", token, body: { name } });
 }
 
 /** GET /letters — all letters, or those changed after `since` (ISO). */
