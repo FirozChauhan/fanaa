@@ -20,6 +20,10 @@ bun link          # makes `fanaa` available everywhere
 
 ```bash
 fanaa                    # asks for a subject, opens $EDITOR blank — just write
+                         # (built-in composer if no $EDITOR is set — no vim needed)
+fanaa add "milk, eggs"   # quick capture: appends to today's letter
+fanaa add                # compose a letter without any editor
+printf 'subject\nbody' | fanaa    # fully piped letter
 fanaa -v                 # set from / to / subject (from & to become defaults)
 fanaa yesterday          # read a letter as email (today, YYYY-MM-DD, MM-DD)
 fanaa ls                 # list recent letters
@@ -27,6 +31,10 @@ fanaa whoami             # show who you write as, and to
 fanaa --from kitten --to heart   # costume change for one letter
 fanaa --date 2026-08-23  # backdate (forgot to write last night)
 ```
+
+No `$EDITOR`? `fanaa` falls back to a built-in composer: type lines, finish
+with Ctrl+D or `.end` on its own line. Quick captures via `fanaa add` never
+touch an editor at all.
 
 ## Layout
 

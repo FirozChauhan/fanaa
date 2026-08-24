@@ -32,3 +32,8 @@ export async function promptText(label: string, def?: string): Promise<string> {
     rl.close();
   }
 }
+
+/** Remaining piped stdin lines, used as a letter body in non-interactive mode. */
+export function pipedInput(): string {
+  return pipedLines.join("\n");
+}

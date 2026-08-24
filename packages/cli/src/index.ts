@@ -4,26 +4,34 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
 import { dayKey, entryPath, localISO, parseDayKey, parseDateArg } from "./date";
-import { runEditor } from "./editor";
+import { composeLines, runEditor } from "./editor";
 import { parseEntry, serializeEntry, type EntryMeta } from "./entry";
 import { commitEntry, gitEmail } from "./git";
 import { listEntries } from "./list";
 import { fanaaRoot } from "./paths";
-import { promptText } from "./prompt";
+import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
 
 function help(): void {
   console.log(`fanaa — write letters only you will ever read.
 
 Usage:
-  fanaa                 write today's letter (asks for subject, opens $EDITOR)
+  fanaa                 write today's letter (asks subject, opens $EDITOR,
+                        or built-in composer if no $EDITOR is set)
+  fanaa add "text"      quick letter — body from the argument
+  fanaa add             compose letter without opening an editor
+  fanaa write           same as \"fanaa add\", explicit
   fanaa yesterday       read a letter  (also: today, YYYY-MM-DD, MM-DD)
   fanaa ls              list recent letters
   fanaa whoami          show who you write as, and to
   fanaa -v              set from/to/subject (from/to become your defaults)
   fanaa --date YYYY-MM-DD   backdate a letter
   fanaa --from X --to Y     write with overrides
-  fanaa -s "subject"        set the subject, skip the prompt`);
+  fanaa -s "subject"        set the subject, skip the prompt
+
+Piping:
+  echo -e "subject\nbody line" | fanaa        letter from stdin
+  echo "body" | fanaa add -s "subject"        quick letter from stdin`);
 }
 
 /** Stamp a date for storage. Backdated entries keep the target day. */
@@ -34,12 +42,16 @@ function stampFor(dateKey: string): string {
   return localISO(base);
 }
 
+type BodyMode = "editor" | "lines" | "arg" | "stdin";
+
 async function cmdWrite(opts: {
   dateKey: string;
   from?: string;
   to?: string;
   subject?: string;
   values: boolean;
+  mode: BodyMode;
+  argBody?: string;
 }): Promise<void> {
   const root = fanaaRoot();
   const cfg = loadConfig(root);
@@ -53,7 +65,8 @@ async function cmdWrite(opts: {
     subject = await promptText("Subject");
     saveConfig(root, { ...cfg, identity: { default_from: from, default_to: to } });
   } else if (subject === undefined) {
-    subject = await promptText("Subject");
+    // Never prompt when the body comes from stdin — those lines are the letter.
+    if (opts.mode !== "stdin") subject = await promptText("Subject");
   }
   subject = subject || "";
 
@@ -62,11 +75,24 @@ async function cmdWrite(opts: {
   const existing = existsSync(p) ? readFileSync(p, "utf8") : "";
   const prevBody = parseEntry(existing).body;
 
-  // Open a blank buffer with the previous body only — frontmatter is re-stamped on save.
-  const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
-  writeFileSync(tmp, prevBody);
-  runEditor(tmp);
-  const newBody = readFileSync(tmp, "utf8").replace(/\n+$/, "");
+  // Acquire the body. Quick modes (add/stdin/lines) append to any existing
+  // entry for the day; editor mode lets you edit the full content.
+  let newBody: string;
+  if (opts.mode === "editor") {
+    const tmp = join(mkdtempSync(join(tmpdir(), "fanaa-")), "entry.md");
+    writeFileSync(tmp, prevBody);
+    runEditor(tmp);
+    newBody = readFileSync(tmp, "utf8");
+  } else if (opts.mode === "lines") {
+    const composed = await composeLines(prevBody);
+    newBody = prevBody ? `${prevBody}\n${composed}` : composed;
+  } else if (opts.mode === "arg") {
+    newBody = prevBody ? `${prevBody}\n${opts.argBody ?? ""}` : (opts.argBody ?? "");
+  } else {
+    const piped = pipedInput();
+    newBody = prevBody ? `${prevBody}\n${piped}` : piped;
+  }
+  newBody = newBody.replace(/\n+$/, "");
 
   if (newBody.trim() === "") {
     console.log("Aborting fanaa due to empty entry.");
@@ -140,6 +166,7 @@ async function main(): Promise<void> {
 
   const root = fanaaRoot();
   const cmd = positional[0];
+  const dateKey = dateArg ? (parseDateArg(dateArg) ?? dayKey(new Date())) : dayKey(new Date());
 
   if (cmd === "ls" || cmd === "list") {
     listEntries(root);
@@ -147,6 +174,16 @@ async function main(): Promise<void> {
   }
   if (cmd === "whoami") {
     cmdWhoami();
+    return;
+  }
+  if (cmd === "add" || cmd === "write") {
+    const argBody = cmd === "add" ? positional.slice(1).join(" ") : undefined;
+    const mode: BodyMode = argBody
+      ? "arg"
+      : process.stdin.isTTY
+        ? "lines"
+        : "stdin";
+    await cmdWrite({ dateKey, from, to, subject, values, mode, argBody });
     return;
   }
   if (cmd !== undefined) {
@@ -160,9 +197,13 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Write mode.
-  const dateKey = dateArg ? (parseDateArg(dateArg) ?? dayKey(new Date())) : dayKey(new Date());
-  await cmdWrite({ dateKey, from, to, subject, values });
+  // Plain `fanaa`: $EDITOR if set, built-in composer otherwise (stdin when piped).
+  const mode: BodyMode = process.env.EDITOR || process.env.VISUAL
+    ? "editor"
+    : process.stdin.isTTY
+      ? "lines"
+      : "stdin";
+  await cmdWrite({ dateKey, from, to, subject, values, mode });
 }
 
 main().catch((err) => {
