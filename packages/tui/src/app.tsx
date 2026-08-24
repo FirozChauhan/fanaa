@@ -182,14 +182,14 @@ export function App() {
 
       {/* panes */}
       <Box flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column" width={listW}>
+        <Box flexDirection="column" width={listW} paddingLeft={1}>
           {hasAbove && (
             <Text color={FAINT}>{" \u2191"}</Text>
           )}
           <LetterList
             letters={visible}
             selected={selInList}
-            width={listW}
+            width={listW - 1}
             height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
           />
           {hasBelow && (
@@ -213,12 +213,12 @@ export function App() {
       </Box>
 
       {/* footer */}
-      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
         <Text color={FAINT}>
-          <Text color={MUTED}>j/k</Text> nav · <Text color={MUTED}>enter</Text> read ·{" "}
+          <Text color={MUTED}>j/k</Text> nav ·{" "}
+          <Text color={MUTED}>enter</Text> read ·{" "}
           <Text color={MUTED}>a</Text> write · <Text color={MUTED}>e</Text> edit ·{" "}
-          <Text color={MUTED}>d</Text> del · <Text color={MUTED}>r</Text> refresh ·{" "}
+          <Text color={MUTED}>d</Text> del · <Text color={MUTED}>r</Text> ref ·{" "}
           <Text color={MUTED}>q</Text> quit
         </Text>
       </Box>
