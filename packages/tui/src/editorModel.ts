@@ -6,10 +6,14 @@ export class EditorModel {
   private undoStack: { lines: string[]; row: number; col: number }[] = [];
   private readonly original: string;
 
-  constructor(text: string) {
+  constructor(text: string, startAtEnd = false) {
     const t = text.replace(/\r\n/g, "\n");
     this.lines = t ? t.replace(/\n$/, "").split("\n") : [""];
     this.original = this.lines.join("\n");
+    if (startAtEnd) {
+      this.row = this.lines.length - 1;
+      this.col = this.lines[this.row].length;
+    }
   }
 
   get dirty(): boolean {
@@ -87,6 +91,61 @@ export class EditorModel {
   gotoCol(c: number): void {
     this.col = c;
     this.clampCol();
+  }
+
+  /** Jump to the start of the next (dir=1) or previous (dir=-1) word. */
+  moveWord(dir: 1 | -1): void {
+    if (dir > 0) {
+      let line = this.lines[this.row];
+      while (this.col < line.length && /\s/.test(line[this.col])) this.col++;
+      while (this.col < line.length && !/\s/.test(line[this.col])) this.col++;
+      while (this.col < line.length && /\s/.test(line[this.col])) this.col++;
+      if (this.col >= line.length && this.row < this.lines.length - 1) {
+        this.row++;
+        this.col = 0;
+      }
+    } else {
+      if (this.col === 0 && this.row > 0) {
+        this.row--;
+        this.col = this.lines[this.row].length;
+        return;
+      }
+      const line = this.lines[this.row];
+      while (this.col > 0 && /\s/.test(line[this.col - 1])) this.col--;
+      while (this.col > 0 && !/\s/.test(line[this.col - 1])) this.col--;
+    }
+  }
+
+  /** Delete one word: dir=-1 backwards (ctrl+backspace), dir=1 forwards (ctrl+delete). */
+  deleteWord(dir: 1 | -1): void {
+    if (dir < 0) {
+      if (this.col === 0) {
+        this.backspace(); // join with the previous line
+        return;
+      }
+      const line = this.lines[this.row];
+      let start = this.col;
+      while (start > 0 && /\s/.test(line[start - 1])) start--;
+      while (start > 0 && !/\s/.test(line[start - 1])) start--;
+      this.lines[this.row] = line.slice(0, start) + line.slice(this.col);
+      this.col = start;
+    } else {
+      const line = this.lines[this.row];
+      let end = this.col;
+      while (end < line.length && !/\s/.test(line[end])) end++;
+      while (end < line.length && /\s/.test(line[end])) end++;
+      this.lines[this.row] = line.slice(0, this.col) + line.slice(end);
+    }
+  }
+
+  gotoDocStart(): void {
+    this.row = 0;
+    this.col = 0;
+  }
+
+  gotoDocEnd(): void {
+    this.row = this.lines.length - 1;
+    this.col = this.lines[this.row].length;
   }
 
   private clampCol(): void {

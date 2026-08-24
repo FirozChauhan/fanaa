@@ -114,7 +114,29 @@ async function cmdWrite(opts: {
   console.log(`\n\u001b[32m\u2713\u001b[0m saved (${key}) as ${from} \u2192 ${to}${tail}`);
 }
 
-function cmdRead(arg: string): void {
+/** Rewrite an existing letter's body; frontmatter (date/from/to/subject) is kept. */
+async function cmdEdit(key: string, newBody: string): Promise<void> {
+  const root = fanaaRoot();
+  const p = entryPath(root, key);
+  if (!existsSync(p)) {
+    console.error(`No letter found at ${key}.`);
+    process.exitCode = 1;
+    return;
+  }
+  const text = readFileSync(p, "utf8");
+  const { meta, body } = parseEntry(text);
+  const cleaned = newBody.replace(/\n+$/, "");
+  if (cleaned.trim() === "") {
+    console.log("Aborting fanaa due to empty entry.");
+    return;
+  }
+  writeFileSync(p, serializeEntry(meta, cleaned));
+  const rev = commitEntry(root, p, `edit: ${meta.subject || "(no subject)"}`);
+  const tail = rev ? `  [git: ${rev}]` : "";
+  console.log(`\n\u001b[32m\u2713\u001b[0m edited ${key}${tail}`);
+}
+
+async function cmdRead(arg: string): Promise<void> {
   const root = fanaaRoot();
   const exact = /^\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/.test(arg);
   const glob = new Bun.Glob("entries/**/*.md");
@@ -187,15 +209,21 @@ async function main(): Promise<void> {
     while (true) {
       const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
       if (res.status === 66) {
-        // The TUI writes "subject\nbody" to .tui-pending; the letter was
-        // composed in the TUI's own editor (exit 66 is only a handoff back
-        // so the entry write + git commit happen here).
+        // The TUI writes the pending payload to .tui-pending; the entry
+        // write/edit + git commit happen here (exit 66 is only a handoff).
+        // New letter: "subject\nbody". Edit: "EDIT:<key>\nbody".
         const raw = existsSync(pending) ? readFileSync(pending, "utf8") : "";
         rmSync(pending, { force: true });
         const nl = raw.indexOf("\n");
-        const subject = (nl === -1 ? raw : raw.slice(0, nl)).trim();
-        const body = nl === -1 ? "" : raw.slice(nl + 1);
-        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false });
+        if (raw.startsWith("EDIT:")) {
+          const key = (nl === -1 ? raw.slice(5) : raw.slice(5, nl)).trim();
+          const body = nl === -1 ? "" : raw.slice(nl + 1);
+          await cmdEdit(key, body);
+        } else {
+          const subject = (nl === -1 ? raw : raw.slice(0, nl)).trim();
+          const body = nl === -1 ? "" : raw.slice(nl + 1);
+          await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false });
+        }
         continue;
       }
       if (res.status === 0) break; // normal quit

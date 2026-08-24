@@ -35,6 +35,9 @@ export function App() {
   const [view, setView] = useState<View>("browse");
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
+  const [editing, setEditing] = useState<
+    { letter: Letter; from: "browse" | "letter" } | null
+  >(null);
 
   const cols = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
@@ -59,7 +62,10 @@ export function App() {
     if (view === "letter") {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
-      else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
+      else if (input === "e") {
+        setEditing({ letter: selected, from: "letter" });
+        setView("editor");
+      } else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
       return;
     }
     if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
@@ -71,27 +77,36 @@ export function App() {
       setView("letter");
     } else if (input === "a") {
       setSubject("");
+      setEditing(null);
       setView("compose");
+    } else if (input === "e" && selected) {
+      setEditing({ letter: selected, from: "browse" });
+      setView("editor");
     } else if (input === "r") setLetters(loadLetters());
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
   /**
    * Hand off to the CLI's write flow by fully exiting the TUI (exit 66).
-   * The `fanaa tui` wrapper sees the code, reads "subject\nbody" from
-   * ~/.fanaa/.tui-pending, writes the entry, then relaunches this TUI.
+   * The `fanaa tui` wrapper reads ~/.fanaa/.tui-pending, writes/edits the
+   * entry, then relaunches this TUI.
+   *
+   * New letter:  "subject\nbody"
+   * Edit letter: "EDIT:<key>\nbody"
    */
-  const saveCompose = (body: string) => {
-    writeFileSync(join(fanaaRoot(), ".tui-pending"), `${subject.trim()}\n${body}`);
+  const saveLetter = (body: string) => {
+    const head = editing ? `EDIT:${editing.letter.key}` : subject.trim();
+    writeFileSync(join(fanaaRoot(), ".tui-pending"), `${head}\n${body}`);
     process.exit(66);
   };
 
   if (view === "editor") {
     return (
       <EditorView
-        initial=""
-        onSave={saveCompose}
-        onCancel={() => setView("browse")}
+        initial={editing ? editing.letter.body : ""}
+        subject={editing ? editing.letter.meta.subject : subject.trim()}
+        onSave={saveLetter}
+        onCancel={() => setView(editing?.from === "letter" ? "letter" : "browse")}
       />
     );
   }
@@ -134,7 +149,7 @@ export function App() {
     return (
       <Box flexDirection="column" height={rows} paddingX={1}>
         <LetterView letter={selected} width={cols - 2} height={bodyH} offset={offset} />
-        <Text color={FAINT}>j/k scroll · esc back</Text>
+        <Text color={FAINT}>j/k scroll · e edit · esc back</Text>
       </Box>
     );
   }
@@ -194,8 +209,8 @@ export function App() {
       <Box paddingX={1}>
         <Text color={FAINT}>
           <Text color={MUTED}>j/k</Text> navigate · <Text color={MUTED}>enter</Text> read ·{" "}
-          <Text color={MUTED}>a</Text> write · <Text color={MUTED}>r</Text> refresh ·{" "}
-          <Text color={MUTED}>q</Text> quit
+          <Text color={MUTED}>a</Text> write · <Text color={MUTED}>e</Text> edit ·{" "}
+          <Text color={MUTED}>r</Text> refresh · <Text color={MUTED}>q</Text> quit
         </Text>
       </Box>
     </Box>

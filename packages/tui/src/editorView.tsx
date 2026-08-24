@@ -1,26 +1,31 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { EditorModel } from "./editorModel";
+import { FAINT, GOLD } from "./util";
 
 /**
  * The fanaa letter editor as a TUI view — runs INSIDE the Ink app, so it uses
  * the exact same input pipeline that already works in the user's terminal
  * (unlike a separate process, whose stdin can end up in a broken state).
  *
- * Keys: ctrl-s save · ctrl-c cancel (y/n) · ctrl-z undo · arrows · pgup/pgdn ·
- * ctrl-a/ctrl-e line start/end · backspace/delete · tab (2 spaces) · esc cancel
+ * Keys: ctrl-s save · ctrl-c cancel (y/n) · ctrl-z undo · arrows ·
+ * ctrl+arrows words · ctrl+up/down document edges · pgup/pgdn ·
+ * ctrl-a/ctrl-e line start/end · backspace/delete · ctrl+backspace/delete word
+ * tab (2 spaces) · esc cancel
  */
 export function EditorView({
   initial,
+  subject,
   onSave,
   onCancel,
 }: {
   initial: string;
+  subject?: string;
   onSave: (body: string) => void;
   onCancel: () => void;
 }) {
   const { stdout } = useStdout();
-  const [model] = useState(() => new EditorModel(initial));
+  const [model] = useState(() => new EditorModel(initial, initial.length > 0));
   const [, rerender] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [cursorOn, setCursorOn] = useState(true);
@@ -74,6 +79,39 @@ export function EditorView({
     }
     if (key.ctrl && input === "e") {
       model.gotoCol(model.lines[model.row].length);
+      touch();
+      return;
+    }
+    // Word navigation + document edges.
+    if (key.ctrl && key.leftArrow) {
+      model.moveWord(-1);
+      touch();
+      return;
+    }
+    if (key.ctrl && key.rightArrow) {
+      model.moveWord(1);
+      touch();
+      return;
+    }
+    if (key.ctrl && key.upArrow) {
+      model.gotoDocStart();
+      touch();
+      return;
+    }
+    if (key.ctrl && key.downArrow) {
+      model.gotoDocEnd();
+      touch();
+      return;
+    }
+    if (key.backspace && key.ctrl) {
+      model.snapshot();
+      model.deleteWord(-1);
+      touch();
+      return;
+    }
+    if (key.delete && key.ctrl) {
+      model.snapshot();
+      model.deleteWord(1);
       touch();
       return;
     }
@@ -148,7 +186,7 @@ export function EditorView({
     }
   });
 
-  const bodyRows = Math.max(1, rows - 1);
+  const bodyRows = Math.max(1, rows - 2);
   const top = Math.min(
     Math.max(0, model.row - Math.floor(bodyRows / 2)),
     Math.max(0, model.lines.length - bodyRows),
@@ -159,6 +197,11 @@ export function EditorView({
 
   return (
     <Box flexDirection="column" height={rows}>
+      <Box paddingX={1}>
+        <Text wrap="truncate" color={subject ? GOLD : FAINT} bold={!!subject}>
+          {subject ? `\u2767 ${subject}` : "no subject"}
+        </Text>
+      </Box>
       <Box flexDirection="column" flexGrow={1}>
         {visible.map((line, i) => {
           const r = top + i;
