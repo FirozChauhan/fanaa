@@ -7,14 +7,14 @@ import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
-import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
+import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
 const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
 const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
 
-type View = "browse" | "letter" | "compose";
+type View = "browse" | "letter" | "compose" | "help";
 
 const TITLE = "FANAA";
 
@@ -33,11 +33,65 @@ function Title() {
   );
 }
 
+/** Centered popup listing every keybinding. */
+function HelpOverlay({
+  cols,
+  rows,
+  onClose,
+}: {
+  cols: number;
+  rows: number;
+  onClose: () => void;
+}) {
+  const w = Math.min(44, cols - 4);
+  const h = Math.min(20, rows - 4);
+  const binds: [string, string][] = [
+    ["j/k ↑↓", "navigate"],
+    ["g / G", "top / bottom"],
+    ["enter", "read letter"],
+    ["a", "write new"],
+    ["e", "edit letter"],
+    ["d", "delete letter"],
+    ["r", "refresh"],
+    ["h / ?", "help"],
+    ["q", "quit"],
+    ["j/k", "scroll letter"],
+    ["esc", "back"],
+    ["enter", "open vim"],
+    ["esc", "cancel"],
+  ];
+  return (
+    <Box
+      width={w}
+      height={h}
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={ACCENT}
+      paddingX={2}
+      paddingTop={1}
+    >
+      <Text bold color={GOLD}>
+        HELP
+      </Text>
+      <Box flexDirection="column" marginTop={1}>
+        {binds.map(([k, desc], i) => (
+          <Text key={`${k}-${i}`}>
+            <Text color={MUTED}>{k.padEnd(12)}</Text>
+            <Text color={PAPER}>{desc}</Text>
+          </Text>
+        ))}
+      </Box>
+      <Text color={FAINT}>esc / h — close</Text>
+    </Box>
+  );
+}
+
 export function App() {
   const { stdout } = useStdout();
   const [letters, setLetters] = useState<Letter[]>(() => loadLetters(JOURNAL));
   const [idx, setIdx] = useState(0);
   const [view, setView] = useState<View>("browse");
+  const [helpReturn, setHelpReturn] = useState<View>("browse");
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
 
@@ -81,7 +135,14 @@ export function App() {
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
       else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
       else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
-      else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
+      else if (input === "h" || input === "?") {
+        setHelpReturn("letter");
+        setView("help");
+      } else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
+      return;
+    }
+    if (view === "help") {
+      if (key.escape || input === "h" || input === "?" || input === "q") setView(helpReturn);
       return;
     }
     if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
@@ -96,9 +157,20 @@ export function App() {
       setView("compose");
     } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
     else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
-    else if (input === "r") setLetters(loadLetters(JOURNAL));
+    else if (input === "h" || input === "?") {
+      setHelpReturn("browse");
+      setView("help");
+    } else if (input === "r") setLetters(loadLetters(JOURNAL));
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
+
+  if (view === "help") {
+    return (
+      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
+        <HelpOverlay cols={cols} rows={rows} onClose={() => setView(helpReturn)} />
+      </Box>
+    );
+  }
 
   if (view === "compose") {
     return (
@@ -215,9 +287,7 @@ export function App() {
       {/* footer */}
       <Box paddingX={1}>
         <Text color={FAINT}>
-          <Text color={MUTED}>j/k</Text> · <Text color={MUTED}>enter</Text> ·{" "}
-          <Text color={MUTED}>a</Text> · <Text color={MUTED}>e</Text> · <Text color={MUTED}>d</Text> ·{" "}
-          <Text color={MUTED}>r</Text> · <Text color={MUTED}>q</Text>
+          <Text color={MUTED}>H</Text>: Help
         </Text>
       </Box>
     </Box>
