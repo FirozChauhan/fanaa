@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import { EditorModel } from "./editorModel";
-import { CUR_LINE_BG, FAINT } from "./util";
 
 /**
  * The fanaa letter editor as a TUI view — runs INSIDE the Ink app, so it uses
@@ -24,12 +23,31 @@ export function EditorView({
   const [model] = useState(() => new EditorModel(initial));
   const [, rerender] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const [cursorOn, setCursorOn] = useState(true);
+  const [typing, setTyping] = useState(false);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Blink the block cursor every 500ms — but only when idle. While typing it
+  // stays solid, and resumes blinking 1s after the last keystroke.
+  useEffect(() => {
+    if (typing) return;
+    const id = setInterval(() => setCursorOn((c) => !c), 500);
+    return () => clearInterval(id);
+  }, [typing]);
+
+  const poke = () => {
+    setTyping(true);
+    setCursorOn(true);
+    clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => setTyping(false), 1000);
+  };
 
   const cols = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
   const touch = () => rerender((n) => n + 1);
 
   useInput((input, key) => {
+    poke();
     if (confirming) {
       if (input === "y" || input === "Y") onCancel();
       else if (input === "n" || input === "N") setConfirming(false);
@@ -136,6 +154,8 @@ export function EditorView({
     Math.max(0, model.lines.length - bodyRows),
   );
   const visible = model.lines.slice(top, top + bodyRows);
+  // Horizontal scroll so the cursor never leaves the screen.
+  const hOff = Math.max(0, model.col - cols + 1);
 
   return (
     <Box flexDirection="column" height={rows}>
@@ -145,8 +165,16 @@ export function EditorView({
           const isCur = r === model.row;
           return (
             <Box key={r} width={cols}>
-              <Text wrap="truncate" backgroundColor={isCur ? CUR_LINE_BG : undefined}>
-                {line || " "}
+              <Text wrap="truncate">
+                {isCur ? (
+                  <>
+                    {line.slice(hOff, model.col)}
+                    {cursorOn ? "\u2588" : line[model.col] || " "}
+                    {line.slice(model.col + 1)}
+                  </>
+                ) : (
+                  line.slice(hOff)
+                )}
               </Text>
             </Box>
           );
