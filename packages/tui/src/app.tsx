@@ -10,6 +10,8 @@ import { LetterView } from "./components/letterView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
+import { readFileSync } from "node:fs";
+
 const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
 const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
@@ -17,6 +19,9 @@ const JOURNAL = journalRoot(STORE, CATEGORY);
 type View = "browse" | "letter" | "compose" | "help";
 
 const TITLE = "FANAA";
+const VERSION = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version as string;
 
 function Title() {
   // Show the journal category next to the logo when it's not the default.
@@ -233,6 +238,7 @@ export function App() {
       {/* header */}
       <Box paddingX={1} alignItems="center">
         <Title />
+        <Text color={MUTED}> v{VERSION}</Text>
         <Box flexGrow={1} />
         <Text color={MUTED}>
           <Text bold color={GOLD}>
