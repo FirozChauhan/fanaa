@@ -216,7 +216,8 @@ export function interactiveEdit(path: string): Promise<void> {
           if (i < bodyRows - 1) frame += "\n";
         }
         const dirty = lines.join("\n") !== original;
-        const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}`;
+        const waiting = keys === 0 ? " · waiting for input…" : "";
+        const left = prompt === "discard" ? "discard changes? y/n" : ` fanaa${dirty ? " · unsaved" : ""}${waiting}`;
         const right = prompt === "discard" ? "" : "ctrl-s save · ctrl-c cancel · ctrl-z undo";
         const pad = Math.max(1, cols - left.length - right.length);
         frame += `\n\x1b[48;5;214m\x1b[30m${left}${" ".repeat(pad)}${right}\x1b[0m`;
@@ -250,6 +251,7 @@ export function interactiveEdit(path: string): Promise<void> {
 
     const onData = (chunk: Buffer) => {
       try {
+        keys++;
         buf += chunk.toString("utf8");
         while (buf.length) {
           if (prompt === "discard") {
@@ -356,6 +358,7 @@ export function interactiveEdit(path: string): Promise<void> {
 
     let buf = "";
     let pasting = false;
+    let keys = 0; // keystrokes received — 0 means input isn't arriving
     const onResize = () => {
       cols = stdout.columns || 80;
       rows = stdout.rows || 24;
@@ -367,7 +370,7 @@ export function interactiveEdit(path: string): Promise<void> {
 
     process.on("SIGWINCH", onResize);
     process.on("exit", restoreTerm);
-    emit("\x1b[?25l\x1b[?2004h\x1b[?u");
+    emit("\x1b[?25l\x1b[?2004h");
     try {
       input.setRawMode(true);
     } catch {

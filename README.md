@@ -21,6 +21,8 @@ bun link          # makes `fanaa` available everywhere
 ```bash
 fanaa                    # asks for a subject, opens the built-in full-screen
                          # editor — no vim, no $EDITOR needed
+fanaa tui                # full-window TUI; `a` composes a letter in the
+                         # built-in in-app editor (same input pipeline)
 fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
 fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter

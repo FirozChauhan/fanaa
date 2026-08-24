@@ -7,9 +7,11 @@ import { fanaaRoot } from "fanaa-core";
 import { loadLetters, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
+import { EditorView } from "./editorView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
 
-type View = "browse" | "letter" | "compose";
+// View "editor" = the in-TUI letter editor (same input pipeline as the rest).
+type View = "browse" | "letter" | "compose" | "editor";
 
 const TITLE = "\u2767 FANAA"; // ❧ FANAA
 
@@ -39,9 +41,19 @@ export function App() {
   const selected = letters[idx];
 
   useInput((input, key) => {
+    if (view === "editor") return; // the EditorView component handles its own keys
     if (view === "compose") {
       if (key.escape) setView("browse");
       else if (key.ctrl && input === "c") process.exit(0);
+      else if (/[\r\n]/.test(input)) {
+        // Enter can arrive glued to the typed subject (fast typing, pasted
+        // input) — ink-text-input only submits on a lone key.return, so we
+        // detect the newline ourselves and submit on the pre-newline text.
+        const merged = subject + input;
+        const i = merged.search(/[\r\n]/);
+        setSubject(merged.slice(0, i).trim());
+        setView("editor");
+      }
       return;
     }
     if (view === "letter") {
@@ -66,14 +78,23 @@ export function App() {
 
   /**
    * Hand off to the CLI's write flow by fully exiting the TUI (exit 66).
-   * The `fanaa tui` wrapper sees the code, reads the subject from
-   * ~/.fanaa/.tui-pending, runs the editor with a clean terminal, then
-   * relaunches this TUI.
+   * The `fanaa tui` wrapper sees the code, reads "subject\nbody" from
+   * ~/.fanaa/.tui-pending, writes the entry, then relaunches this TUI.
    */
-  const submitCompose = () => {
-    writeFileSync(join(fanaaRoot(), ".tui-pending"), subject.trim());
+  const saveCompose = (body: string) => {
+    writeFileSync(join(fanaaRoot(), ".tui-pending"), `${subject.trim()}\n${body}`);
     process.exit(66);
   };
+
+  if (view === "editor") {
+    return (
+      <EditorView
+        initial=""
+        onSave={saveCompose}
+        onCancel={() => setView("browse")}
+      />
+    );
+  }
 
   if (view === "compose") {
     return (
@@ -87,7 +108,7 @@ export function App() {
           <TextInput
             value={subject}
             onChange={setSubject}
-            onSubmit={submitCompose}
+            onSubmit={() => setView("editor")}
             placeholder="(no subject)"
           />
         </Box>

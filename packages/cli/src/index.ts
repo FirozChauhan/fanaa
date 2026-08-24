@@ -187,9 +187,15 @@ async function main(): Promise<void> {
     while (true) {
       const res = spawnSync("bun", ["run", tuiEntry], { stdio: "inherit" });
       if (res.status === 66) {
-        const subject = existsSync(pending) ? readFileSync(pending, "utf8").trim() : "";
+        // The TUI writes "subject\nbody" to .tui-pending; the letter was
+        // composed in the TUI's own editor (exit 66 is only a handoff back
+        // so the entry write + git commit happen here).
+        const raw = existsSync(pending) ? readFileSync(pending, "utf8") : "";
         rmSync(pending, { force: true });
-        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "editor", values: false });
+        const nl = raw.indexOf("\n");
+        const subject = (nl === -1 ? raw : raw.slice(0, nl)).trim();
+        const body = nl === -1 ? "" : raw.slice(nl + 1);
+        await cmdWrite({ dateKey: dayKey(new Date()), subject, mode: "arg", argBody: body, values: false });
         continue;
       }
       if (res.status === 0) break; // normal quit

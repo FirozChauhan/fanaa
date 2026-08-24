@@ -7,6 +7,7 @@ export const MUTED = "#8a8175"; // secondary text
 export const FAINT = "#5c564d"; // tertiary text, hints
 export const DIVIDER = "#3a362f"; // separators
 export const SEL_BG = "#3a3124"; // selected row background (warm umber)
+export const CUR_LINE_BG = "#33302b"; // editor current line — warm dark grey (subtle, no bright highlight)
 
 function hexToRgb(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);
