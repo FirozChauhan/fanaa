@@ -7,11 +7,9 @@ import { fanaaRoot } from "fanaa-core";
 import { loadLetters, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
-import { EditorView } from "./editorView";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, ACCENT, gradientColors } from "./util";
 
-// View "editor" = the in-TUI letter editor (same input pipeline as the rest).
-type View = "browse" | "letter" | "compose" | "editor";
+type View = "browse" | "letter" | "compose";
 
 const TITLE = "\u2767 FANAA"; // ❧ FANAA
 
@@ -35,16 +33,23 @@ export function App() {
   const [view, setView] = useState<View>("browse");
   const [offset, setOffset] = useState(0);
   const [subject, setSubject] = useState("");
-  const [editing, setEditing] = useState<
-    { letter: Letter; from: "browse" | "letter" } | null
-  >(null);
 
   const cols = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
   const selected = letters[idx];
 
+  /**
+   * Hand off to the CLI wrapper: it opens vim on the letter body (git-commit
+   * style), writes/edits the entry, then relaunches this TUI. Pending payload:
+   *   new letter:  subject
+   *   edit letter: EDIT:<key>
+   */
+  const handOff = (payload: string) => {
+    writeFileSync(join(fanaaRoot(), ".tui-pending"), payload);
+    process.exit(66);
+  };
+
   useInput((input, key) => {
-    if (view === "editor") return; // the EditorView component handles its own keys
     if (view === "compose") {
       if (key.escape) setView("browse");
       else if (key.ctrl && input === "c") process.exit(0);
@@ -54,18 +59,15 @@ export function App() {
         // detect the newline ourselves and submit on the pre-newline text.
         const merged = subject + input;
         const i = merged.search(/[\r\n]/);
-        setSubject(merged.slice(0, i).trim());
-        setView("editor");
+        handOff(merged.slice(0, i).trim());
       }
       return;
     }
     if (view === "letter") {
       if (key.downArrow || input === "j") setOffset((o) => o + 1);
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
-      else if (input === "e") {
-        setEditing({ letter: selected, from: "letter" });
-        setView("editor");
-      } else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
+      else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
+      else if (key.return || key.escape || key.rightArrow || input === "q") setView("browse");
       return;
     }
     if (key.downArrow || input === "j") setIdx((i) => Math.min(letters.length - 1, i + 1));
@@ -77,45 +79,17 @@ export function App() {
       setView("letter");
     } else if (input === "a") {
       setSubject("");
-      setEditing(null);
       setView("compose");
-    } else if (input === "e" && selected) {
-      setEditing({ letter: selected, from: "browse" });
-      setView("editor");
-    } else if (input === "r") setLetters(loadLetters());
+    } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
+    else if (input === "r") setLetters(loadLetters());
     else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
-
-  /**
-   * Hand off to the CLI's write flow by fully exiting the TUI (exit 66).
-   * The `fanaa tui` wrapper reads ~/.fanaa/.tui-pending, writes/edits the
-   * entry, then relaunches this TUI.
-   *
-   * New letter:  "subject\nbody"
-   * Edit letter: "EDIT:<key>\nbody"
-   */
-  const saveLetter = (body: string) => {
-    const head = editing ? `EDIT:${editing.letter.key}` : subject.trim();
-    writeFileSync(join(fanaaRoot(), ".tui-pending"), `${head}\n${body}`);
-    process.exit(66);
-  };
-
-  if (view === "editor") {
-    return (
-      <EditorView
-        initial={editing ? editing.letter.body : ""}
-        subject={editing ? editing.letter.meta.subject : subject.trim()}
-        onSave={saveLetter}
-        onCancel={() => setView(editing?.from === "letter" ? "letter" : "browse")}
-      />
-    );
-  }
 
   if (view === "compose") {
     return (
       <Box flexDirection="column" height={rows} paddingX={2} paddingTop={3}>
         <Title />
-        <Text color={MUTED}>a new letter — subject first, then the fanaa editor</Text>
+        <Text color={MUTED}>a new letter — subject first, then vim</Text>
         <Box marginTop={1}>
           <Text bold color={ACCENT}>
             {"\u276f"} {" "}
@@ -123,11 +97,11 @@ export function App() {
           <TextInput
             value={subject}
             onChange={setSubject}
-            onSubmit={() => setView("editor")}
+            onSubmit={() => handOff(subject.trim())}
             placeholder="(no subject)"
           />
         </Box>
-        <Text color={FAINT}>enter = write · esc = cancel</Text>
+        <Text color={FAINT}>enter = vim · esc = cancel</Text>
       </Box>
     );
   }
@@ -149,7 +123,7 @@ export function App() {
     return (
       <Box flexDirection="column" height={rows} paddingX={1}>
         <LetterView letter={selected} width={cols - 2} height={bodyH} offset={offset} />
-        <Text color={FAINT}>j/k scroll · e edit · esc back</Text>
+        <Text color={FAINT}>j/k scroll · e edit (vim) · esc back</Text>
       </Box>
     );
   }

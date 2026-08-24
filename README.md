@@ -21,9 +21,8 @@ bun link          # makes `fanaa` available everywhere
 ```bash
 fanaa                    # asks for a subject, opens the built-in full-screen
                          # editor — no vim, no $EDITOR needed
-fanaa tui                # full-window TUI; `a` composes a letter in the
-                         # built-in in-app editor, `e` edits one (same
-                         # input pipeline as the rest of the TUI)
+fanaa tui                # full-window TUI; `a` composes a letter (vim opens
+                         # on the body), `e` edits one (ditto)
 fanaa add "milk, eggs"   # quick capture: a fresh letter from the argument
 fanaa add                # compose on the command line (ctrl-d or .end to finish)
 printf 'subject\nbody' | fanaa    # fully piped letter
@@ -35,12 +34,14 @@ fanaa --from kitten --to heart   # costume change for one letter
 fanaa --date 2026-08-23  # backdate (forgot to write last night)
 ```
 
-Fanaa ships its own full-screen editor (insert mode, undo, paste):
-`ctrl-s` saves, `ctrl-c` cancels, `ctrl-z` undoes, `ctrl+arrows` hop by
-word, `ctrl+backspace`/`ctrl+delete` delete words, `ctrl+up/down` jump to
-the letter's start/end. Set `FANAA_EDITOR=vim` if you insist on an external
-editor. Every capture writes a fresh letter file — nothing is ever merged
-or appended; editing a letter rewrites its body in place and commits an
+Fanaa uses vim as its letter editor (git-commit style): the TUI prompts for
+a subject, then opens vim on an empty temp file; write your letter, save and
+quit (`:wq`), and the entry is written. Cancel with `:cq` or save an empty
+file to abort. Set `FANAA_EDITOR=nano` (or any editor) to override. The raw
+`fanaa` command does the same — subject prompt, then vim.
+
+Every capture writes a fresh letter file — nothing is ever merged or
+appended; editing a letter rewrites its body in place and commits an
 `edit: <subject>` revision.
 
 ## Layout
