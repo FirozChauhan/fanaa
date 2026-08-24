@@ -19,12 +19,13 @@
     },
     "packages/cli": {
       "name": "fanaa",
-      "version": "0.1.25",
+      "version": "0.2.0",
       "bin": {
         "fanaa": "src/index.ts",
       },
       "dependencies": {
         "fanaa-core": "workspace:*",
+        "fanaa-sync": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -32,14 +33,24 @@
     },
     "packages/core": {
       "name": "fanaa-core",
-      "version": "0.1.25",
+      "version": "0.2.0",
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
+    "packages/sync": {
+      "name": "fanaa-sync",
+      "version": "0.2.0",
+      "dependencies": {
+        "fanaa-core": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "latest",
       },
     },
     "packages/tui": {
       "name": "fanaa-tui",
-      "version": "0.1.25",
+      "version": "0.2.0",
       "bin": {
         "fanaa-tui": "src/index.tsx",
       },
@@ -105,6 +116,8 @@
     "fanaa-api": ["fanaa-api@workspace:packages/api"],
 
     "fanaa-core": ["fanaa-core@workspace:packages/core"],
+
+    "fanaa-sync": ["fanaa-sync@workspace:packages/sync"],
 
     "fanaa-tui": ["fanaa-tui@workspace:packages/tui"],
 

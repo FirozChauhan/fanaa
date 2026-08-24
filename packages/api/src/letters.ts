@@ -44,7 +44,10 @@ letters.get("/", async (c) => {
 
   let cursor: string | null = since ?? null;
   for (const r of rows) {
-    const u = new Date(r.updated_at).toISOString();
+    // Round UP past the server's stored sub-ms precision: toISOString()
+    // truncates to ms, so a raw max timestamp would re-return the newest
+    // row on every subsequent pull (updated_at > since would keep matching).
+    const u = new Date(new Date(r.updated_at).getTime() + 1).toISOString();
     if (cursor === null || u > cursor) cursor = u;
   }
   return c.json({

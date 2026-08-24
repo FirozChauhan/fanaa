@@ -12,6 +12,8 @@ import { listEntries } from "./list";
 import { fanaaRoot } from "fanaa-core";
 import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
+import { cmdLogin, cmdLogout, cmdSync } from "./syncCli";
+import { recordDelete } from "fanaa-sync";
 
 /**
  * The fanaa command-line interface (`bin fanaa` → this file).
@@ -40,6 +42,9 @@ Usage:
   fanaa tui             the beautiful full-screen TUI
   fanaa ls              list recent letters
   fanaa whoami          show who you write as, and to
+  fanaa login [email]   sign in for cloud sync (email code)
+  fanaa logout          forget the session token
+  fanaa sync            push local letters, pull cloud changes
   fanaa -v              set from/to/subject/category (become your defaults)
   fanaa --date YYYY-MM-DD   backdate a letter
   fanaa --from X --to Y     write with overrides
@@ -215,6 +220,7 @@ async function cmdDelete(key: string, category = activeCategory()): Promise<void
   const rev = commitEntry(root, p, `delete: ${subj}`);
   const tail = rev ? `  [git: ${rev}]` : "";
   console.log(`\u001b[31m\u2717\u001b[0m deleted ${key} (${subj})${tail}`);
+  recordDelete(fanaaRoot(), category, key);
 }
 
 /**
@@ -350,6 +356,18 @@ async function main(): Promise<void> {
       if (res.status === 130) continue; // ctrl+c in editor → back to TUI
       break; // unexpected error
     }
+    return;
+  }
+  if (cmd === "login") {
+    await cmdLogin(positional[1]);
+    return;
+  }
+  if (cmd === "logout") {
+    cmdLogout();
+    return;
+  }
+  if (cmd === "sync") {
+    await cmdSync(activeCategory(category));
     return;
   }
   if (cmd === "ls" || cmd === "list") {

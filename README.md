@@ -30,6 +30,9 @@ fanaa --cat work         # write to the "work" journal (default category: fanaa)
 fanaa yesterday          # read letters as email (today, YYYY-MM-DD, MM-DD)
 fanaa ls                 # list recent letters
 fanaa whoami             # show who you write as, and to
+fanaa login [email]      # sign in for cloud sync (email code)
+fanaa logout             # forget the session token
+fanaa sync               # push local letters, pull cloud changes
 fanaa --from kitten --to heart   # costume change for one letter
 fanaa --date 2026-08-23  # backdate (forgot to write last night)
 ```
@@ -75,13 +78,34 @@ Every letter gets a unique key `YYYY-MM-DD-HHMM-XXXXXX` (`XXXXXX` is a
 6-character hash) and the frontmatter carries the concatenated ID
 (`id: 0912K7X2P9`). Old pre-hash letters are read without issue.
 
+## Cloud sync
+
+Local letters are the source of truth; the cloud is an optional backup
+(powered by the `fanaa-api` package — a Hono worker on Neon/Postgres with
+email-code auth). Nothing is uploaded until you sign in:
+
+```bash
+fanaa login you@example.com   # a 6-digit code is emailed to you
+fanaa sync                    # push local letters, pull cloud changes
+fanaa logout                  # forget the session token
+```
+
+Sync is a **local-first outbox**: writes, edits and deletes made offline
+are queued locally and pushed on the next `fanaa sync`; changes from other
+devices are pulled since the last cursor. Conflicts resolve
+last-write-wins on timestamps, and deletes replicate as tombstones (a
+letter deleted on one device disappears everywhere). The session token and
+sync state live in `~/.fanaa/state/` (0600, git-guarded). Set
+`FANAA_API_URL` to point the CLI at a specific server (default
+`http://localhost:8787`).
+
 ## Roadmap
 
 - [x] Write flow: blank editor, auto date/subject, git commit per letter
 - [x] Read flow: email-style render, list, whoami
 - [x] Identity system: `-v`, `--from`, `--to`, defaults
+- [x] Cloud sync: email-code auth, `fanaa login` (pure CLI)
+- [x] Local-first outbox sync: offline writes, retry on next sync
 - [ ] Threads: `fanaa to heart` (all letters to a recipient)
 - [ ] Weekly digest: `fanaa digest -w`
-- [ ] Cloud sync: Neon + Hono + Better Auth, `fanaa login` (pure CLI)
-- [ ] Local-first outbox sync: offline writes, retry with backoff
 - [ ] E2E encryption derived from your password (zero-knowledge)

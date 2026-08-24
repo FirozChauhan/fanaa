@@ -1,7 +1,7 @@
 {
   "name": "project-fanaa",
   "private": true,
-  "version": "0..21",
+  "version": "0.2.0",
   "description": "Fanaa — write letters only you will ever read. From whoever you want to be. To whoever you love.",
   "workspaces": ["packages/*"]
 }

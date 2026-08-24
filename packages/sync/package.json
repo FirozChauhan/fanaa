@@ -1,0 +1,17 @@
+{
+  "name": "fanaa-sync",
+  "version": "0.2.0",
+  "type": "module",
+  "private": true,
+  "description": "Fanaa cloud sync — API client, session state, and the local-first outbox engine",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "fanaa-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

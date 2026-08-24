@@ -8,7 +8,8 @@
     "fanaa": "src/index.ts"
   },
   "dependencies": {
-    "fanaa-core": "workspace:*"
+    "fanaa-core": "workspace:*",
+    "fanaa-sync": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest"
