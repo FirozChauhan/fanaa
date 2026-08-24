@@ -290,6 +290,7 @@ export function App() {
       </Box>
 
       {/* footer */}
+      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
         <Text color={MUTED}>{VERSION}</Text>
         <Text color={FAINT}> · </Text>
