@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { rfcDate } from "fanaa-core";
+import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
 import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, truncate, wrap } from "../util";
 
@@ -19,6 +19,7 @@ export function LetterView({
   const m = letter.meta;
   // Wrap email addresses in angle brackets; names ("ME") stay bare.
   const email = (v: string) => (v.includes("@") ? `<${v}>` : v);
+  const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
   const bodyLines = wrap(letter.body.replace(/\n+$/, ""), Math.max(20, width - 2));
   const shown = height ? bodyLines.slice(offset, offset + height) : bodyLines.slice(offset);
   const rule = "\u2500".repeat(Math.max(4, width - 2));
@@ -27,7 +28,9 @@ export function LetterView({
     <Box flexDirection="column" paddingX={1}>
       <Text>
         <Text color={FAINT}>Date:    </Text>
-        <Text color={PAPER}>{rfcDate(letter.date).toUpperCase()}</Text>
+        <Text color={PAPER}>
+          {rfcDate(letter.date).toUpperCase()}  {time}
+        </Text>
       </Text>
       <Text>
         <Text color={FAINT}>From:    </Text>
