@@ -7,7 +7,7 @@ import { fanaaRoot, journalRoot } from "fanaa-core";
 import { loadLetters, dayCounts, computeStreak, type Letter } from "./data";
 import { LetterList } from "./components/letterList";
 import { LetterView } from "./components/letterView";
-import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBody } from "./util";
+import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
 import { readFileSync } from "node:fs";
@@ -171,13 +171,13 @@ export function App() {
       return;
     }
     if (view === "letter") {
-      if (key.downArrow || input === "j") setOffset((o) => o + 1);
+      if (key.downArrow || input === "j") setOffset((o) => Math.min(maxOffset, o + 1));
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
       else if (input === "f") setLetterFull((v) => !v);
       else if (input === "n" && hlLines.length > 0) {
         const next = (hlIdx + 1) % hlLines.length;
         setHlIdx(next);
-        setOffset(hlLines[next]);
+        setOffset(Math.min(hlLines[next], maxOffset));
       } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
       else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
       else if (input === "h" || input === "?") {
@@ -220,13 +220,20 @@ export function App() {
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
   const listH = Math.max(3, rows - 4);
 
-  // Body line indices that contain a #"…"# highlight. Must use the same wrap
-  // width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
-  const hlLines = useMemo(() => {
+  // Wrapped body lines of the selected letter (shared cache with LetterView).
+  const bodyLines = useMemo(() => {
     if (!selected) return [];
-    const lines = wrapBody(selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
-    return lines.map((ln, i) => (ln.some((s) => s.underline) ? i : -1)).filter((i) => i >= 0);
+    return wrapBodyCached(selected.key, selected.body.replace(/\n+$/, ""), Math.max(20, previewW - 2));
   }, [selected, previewW]);
+  // Body line indices that contain a #"…"# / #…# highlight. Must use the same
+  // wrap width as LetterView (Math.max(20, previewW - 2)) so `n` lands correctly.
+  const hlLines = useMemo(
+    () => bodyLines.map((ln, i) => (ln.some((s) => s.underline) ? i : -1)).filter((i) => i >= 0),
+    [bodyLines]
+  );
+  // The letter body fits in (listH - 5) rows (Date/From/To/Subject + rule are
+  // overhead); beyond that you may scroll, never further than the last line.
+  const maxOffset = Math.max(0, bodyLines.length - (listH - 5));
 
   if (view === "help") {
     return (

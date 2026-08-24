@@ -118,3 +118,19 @@ export function wrapBody(body: string, width: number): InlineSeg[][] {
   }
   return out;
 }
+
+// The same letter re-renders on every keystroke, and LetterView + the n-key
+// highlight jump + the scroll clamp each need the wrapped body — parsing and
+// wrapping it every time is the TUI's biggest per-render cost. Memoize by
+// (letter key, width, body length) and share across all call sites.
+const wrapCache = new Map<string, InlineSeg[][]>();
+export function wrapBodyCached(key: string, body: string, width: number): InlineSeg[][] {
+  const ck = `${key}|${width}|${body.length}`;
+  let v = wrapCache.get(ck);
+  if (!v) {
+    if (wrapCache.size > 128) wrapCache.clear();
+    v = wrapBody(body, width);
+    wrapCache.set(ck, v);
+  }
+  return v;
+}
