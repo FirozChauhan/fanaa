@@ -222,7 +222,6 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
         ["r", "refresh"],
         ["/", "search letters"],
         ["s", "sort: date/alpha/len"],
-        ["t", "timeline sidebar"],
         ["c", "collapse month"],
       ],
     },
@@ -238,8 +237,11 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
       ],
     },
     {
-      title: "LOOK",
-      items: [["T", "cycle theme"]],
+      title: "MINOR",
+      items: [
+        ["t", "timeline sidebar"],
+        ["T", "cycle theme"],
+      ],
     },
     {
       title: "CLOUD",
