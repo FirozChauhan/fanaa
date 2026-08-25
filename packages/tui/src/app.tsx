@@ -855,22 +855,6 @@ export function App() {
           <>
             <Text color={MUTED}>{VERSION}</Text>
             <Text color={FAINT}> · </Text>
-            {!timeline && (
-              <>
-                <Text color={FAINT}>
-                  <Text color={MUTED}>S</Text>: {sortMode}
-                </Text>
-                <Text color={FAINT}> · </Text>
-              </>
-            )}
-            <Text color={FAINT}>
-              <Text color={MUTED}>T</Text>: {timeline ? "timeline" : "list"}
-            </Text>
-            <Text color={FAINT}> · </Text>
-            <Text color={FAINT}>
-              <Text color={MUTED}>H</Text>: Help
-            </Text>
-            <Text color={FAINT}> · </Text>
             <Text color={FAINT}>
               <Text color={MUTED}>P</Text>: sync
             </Text>
