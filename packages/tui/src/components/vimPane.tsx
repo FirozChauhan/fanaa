@@ -23,7 +23,7 @@ import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
  * vim integration: a small config file is written next to the temp file and
  * sourced after the user's vimrc — it applies the TUI's warm paper-and-ink
  * palette (termguicolors + highlight groups), auto-saves on every change and
- * on exit, and adds the app close hotkey (ctrl+q).
+ * on exit, and adds the app close key (esc).
  */
 
 // Warm defaults that match the app's paper-on-ink look (used when reverse
@@ -166,14 +166,14 @@ function vimrcContent(): string {
     '" a plain :q quits cleanly instead of E37) and once more on any exit.',
     "au TextChangedI,TextChanged * sil! write",
     "au VimLeavePre * sil! write",
-    '" modeless editor: insert mode is the only mode. ESC / ctrl+c can\'t leave',
+    '" modeless editor: insert mode is the only mode. ctrl+c can\'t leave',
     '" it, so a stray keypress can never turn into normal-mode commands.',
-    "inoremap <Esc> <Nop>",
     "inoremap <C-c> <Nop>",
-    '" app hotkey: ctrl+q = close (saves + exits). Saving is automatic:',
+    '" app close key: esc = close (saves + exits) — matches the app\'s',
+    '" esc/back convention. Saving is automatic:',
     '" every keystroke writes via TextChangedI and exit writes via VimLeavePre.',
-    "inoremap <C-q> <C-o>:x<CR>",
-    "nnoremap <C-q> :x<CR>",
+    "inoremap <Esc> <C-o>:x<CR>",
+    "nnoremap <Esc> :x<CR>",
   ].join("\n") + "\n";
 }
 
