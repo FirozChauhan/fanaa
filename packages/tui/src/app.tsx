@@ -913,31 +913,23 @@ export function App() {
         )}
       </Box>
 
-      {/* footer — the divider is hidden while vim is open so the frame
-          stays one row shorter than the terminal; Ink then redraws
-          incrementally (eraseLines) instead of 2J-clearing the whole
-          screen on every keystroke, which flashes/lags on real terminals */}
-      {!editing && <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>}
+      {/* footer — the divider and version/sync line stay visible in every
+          view (including while vim is open) so the footer is persistent.
+          The frame is height={rows}, and the divider+footer occupy the last
+          two rows; the sidebar/preview panes flexGrow to fill the rest. */}
+      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
-        {editing ? (
-          <Text color={FAINT}>
-            vim · <Text color={MUTED}>esc</Text> close
-          </Text>
-        ) : (
+        <Text color={MUTED}>{VERSION}</Text>
+        <Text color={FAINT}> · </Text>
+        <Text color={FAINT}>
+          <Text color={MUTED}>P</Text>: sync
+        </Text>
+        {q && !searching && view === "browse" && (
           <>
-            <Text color={MUTED}>{VERSION}</Text>
             <Text color={FAINT}> · </Text>
-            <Text color={FAINT}>
-              <Text color={MUTED}>P</Text>: sync
+            <Text color={AMBER}>
+              /{q}/ ({filtered.length})
             </Text>
-            {q && !searching && view === "browse" && (
-              <>
-                <Text color={FAINT}> · </Text>
-                <Text color={AMBER}>
-                  /{q}/ ({filtered.length})
-                </Text>
-              </>
-            )}
           </>
         )}
         {flash && (
