@@ -395,31 +395,36 @@ export function App() {
     setView("browse");
   };
 
-  /** vim exited: save or abort, then reload the letter list. */
+  /** vim exited: leave the editor immediately, then save. The git commit
+   *  runs in a continuation so the exit never stalls on disk/git latency —
+   *  the browse view paints the instant vim dies, then the result (flash +
+   *  refreshed list) appears when the save lands. */
   const finishEdit = (body: string) => {
     const s = edit;
-    try {
-      if (s?.mode === "compose") {
-        const cleaned = body.replace(/\n+$/, "");
-        if (cleaned.trim() === "") {
-          setFlash("aborted \u2014 empty letter");
-        } else {
-          const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
-          setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
-        }
-      } else if (s?.mode === "edit") {
-        const res = editLetter(JOURNAL, s.key, body);
-        if (res.status === "saved") setFlash(`edited ${s.key}`);
-        else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
-        else setFlash("aborted \u2014 empty letter");
-      }
-    } catch (err) {
-      setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
-    }
     setEdit(null);
     editBusyRef.current = false;
-    setLetters(loadLetters(JOURNAL));
-    setIdx(0);
+    setTimeout(() => {
+      try {
+        if (s?.mode === "compose") {
+          const cleaned = body.replace(/\n+$/, "");
+          if (cleaned.trim() === "") {
+            setFlash("aborted \u2014 empty letter");
+          } else {
+            const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
+            setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
+          }
+        } else if (s?.mode === "edit") {
+          const res = editLetter(JOURNAL, s.key, body);
+          if (res.status === "saved") setFlash(`edited ${s.key}`);
+          else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
+          else setFlash("aborted \u2014 empty letter");
+        }
+      } catch (err) {
+        setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
+      }
+      setLetters(loadLetters(JOURNAL));
+      setIdx(0);
+    }, 0);
   };
 
   /** Delete a letter inline (was a CLI handoff; the git commit happens here). */
@@ -844,7 +849,7 @@ export function App() {
       <Box paddingX={1}>
         {editing ? (
           <Text color={FAINT}>
-            vim · <Text color={MUTED}>insert mode</Text> · <Text color={MUTED}>esc</Text> close
+            vim · <Text color={MUTED}>esc</Text> close
           </Text>
         ) : (
           <>

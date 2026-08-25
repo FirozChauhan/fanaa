@@ -149,6 +149,10 @@ function vimrcContent(): string {
     "set termguicolors",
     "set background=dark",
     "set noswapfile nobackup nowritebackup",
+    '" fast esc-close: wait only 25ms for a key-code sequence after ESC,',
+    '" so a lone ESC (close) fires quickly; arrow sequences still arrive',
+    '" atomically from a real terminal and decode fine.',
+    "set ttimeout ttimeoutlen=25",
     '" minimal chrome: no line numbers, no statusline, no mode line, no ~ fill',
     "set nonumber",
     "set norelativenumber",
@@ -299,6 +303,7 @@ export function VimPane({
     process.stdin.on("data", onData);
 
     return () => {
+      if (timer) clearTimeout(timer);
       process.stdin.off("data", onData);
       term.close();
       xterm.dispose();
