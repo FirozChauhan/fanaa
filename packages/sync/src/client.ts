@@ -64,7 +64,7 @@ async function api<T>(
 
 /**
  * POST /auth/request — starts email verification. channel is "email" when a
- * real email backend is set (Clerk/Resend), "dev" when the code is printed to
+ * real email backend is set (Clerk), "dev" when the code is printed to
  * the server console. verification_id is present on the Clerk path and must be
  * passed back to /auth/verify together with the code.
  */

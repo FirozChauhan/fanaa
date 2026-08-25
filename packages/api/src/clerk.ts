@@ -7,7 +7,7 @@
  *
  * Clerk handles all email deliverability (no DKIM, no SMTP, no Resend key).
  * When CLERK_SECRET_KEY is unset the app falls back to its own dev-mode flow
- * (auth_codes table + console.log / Resend) — see auth.ts.
+ * (auth_codes table + console.log) — see auth.ts.
  */
 
 const BASE = "https://api.clerk.com/v1";
