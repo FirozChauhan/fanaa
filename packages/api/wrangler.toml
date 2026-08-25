@@ -1,5 +1,5 @@
 # Fanaa API — Cloudflare Workers deployment
-# Env vars (DATABASE_URL, CLERK_SECRET_KEY, optional RESEND_API_KEY) are set
+# Env vars (DATABASE_URL, CLERK_SECRET_KEY) are set
 # as secrets:
 #   bunx wrangler secret put DATABASE_URL
 #   bunx wrangler secret put CLERK_SECRET_KEY
