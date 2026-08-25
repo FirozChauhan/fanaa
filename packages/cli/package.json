@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "fanaa-core": "workspace:*",
-    "fanaa-sync": "workspace:*"
+    "fanaa-sync": "workspace:*",
+    "fanaa-tui": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest"

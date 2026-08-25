@@ -47,9 +47,12 @@ type View = "browse" | "letter" | "compose" | "help" | "sync";
 type EditSession = { mode: "compose"; subject: string } | { mode: "edit"; key: string };
 
 const TITLE = "FANAA";
-const VERSION = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-).version as string;
+
+// Version shown in the footer. Bun embeds JSON imports into compiled
+// binaries (`bun build --compile`), so the same import works from source AND
+// from a single-binary build — no `--define` or build-time flag needed.
+import pkg from "../package.json" with { type: "json" };
+const VERSION: string = pkg.version;
 
 /**
  * Build the timeline sidebar's row list from letters, dropping the entries

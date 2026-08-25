@@ -12,6 +12,18 @@ import { pipedInput, promptText } from "./prompt";
 import { renderEntry, dim } from "./render";
 import { cmdLogin, cmdLogout, cmdName, cmdSync } from "./syncCli";
 import { recordDelete } from "fanaa-sync";
+import { runTui } from "fanaa-tui";
+
+/**
+ * Binary dispatch: the compiled `fanaa` executable re-execs itself with
+ * FANAA_TUI=1 for the `tui` command (see spawnTui). This flag can never leak
+ * from a real user shell, so intercepting it here is safe — it runs the Ink
+ * app in-process and hands the process over.
+ */
+if (process.env.FANAA_TUI === "1") {
+  await runTui();
+  process.exit(0);
+}
 
 /**
  * The fanaa command-line interface (`bin fanaa` → this file).
@@ -225,6 +237,25 @@ function cmdWhoami(): void {
 }
 
 /**
+ * Spawn the full-screen TUI (used by `fanaa tui`).
+ *
+ * Two modes:
+ * - Running from source: the sibling workspace entry `../../tui/src/index.tsx`
+ *   exists, so spawn `bun run <entry>` (separate process, full terminal handoff).
+ * - Compiled binary (`bun build --compile`): no source tree — re-exec ourselves
+ *   with FANAA_TUI=1. The entry dispatch at the top of this file then runs the
+ *   Ink TUI in-process and exits. `process.execPath` is the binary path itself.
+ */
+function spawnTui(cat: string, relaunch: boolean): ReturnType<typeof spawnSync> {
+  const tuiEntry = join(import.meta.dir, "../../tui/src/index.tsx");
+  const env = { ...process.env, FANAA_CATEGORY: cat, FANAA_NO_SPLASH: relaunch ? "1" : "0" };
+  if (existsSync(tuiEntry)) {
+    return spawnSync("bun", ["run", tuiEntry], { stdio: "inherit", env });
+  }
+  return spawnSync(process.execPath, [], { stdio: "inherit", env: { ...env, FANAA_TUI: "1" } });
+}
+
+/**
  * Parse argv and dispatch. Flag parsing is intentionally manual (no
  * dependency): `-v/--values`, `--from`, `--to`, `--cat/--category`,
  * `-s/--subject`, `--date`, `-h/--help`; anything else is positional
@@ -265,7 +296,6 @@ async function main(): Promise<void> {
   if (cmd === "tui") {
     // Loop: the TUI fully exits before the editor runs (terminal handoff), then restarts.
     // Exit 66 = "compose requested" (subject stashed in .tui-pending).
-    const tuiEntry = join(import.meta.dir, "../../tui/src/index.tsx");
     const store = fanaaRoot();
     const cat = activeCategory();
     const root = journalStore(cat);
@@ -274,10 +304,7 @@ async function main(): Promise<void> {
     // skip it so the write loop stays snappy.
     let relaunch = false;
     while (true) {
-      const res = spawnSync("bun", ["run", tuiEntry], {
-        stdio: "inherit",
-        env: { ...process.env, FANAA_CATEGORY: cat, FANAA_NO_SPLASH: relaunch ? "1" : "0" },
-      });
+      const res = spawnTui(cat, relaunch);
       if (res.status === 66) {
         // The TUI hands the letter off to vim (git-commit style): it writes
         // the subject (new letter) or "EDIT:<key>" (rewrite) to .tui-pending

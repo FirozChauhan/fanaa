@@ -1,6 +1,10 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+// Bun imports .txt as an embedded string — the same content is available in
+// source runs AND compiled binaries (bun build --compile inlines it).
+import wordsTxt from "../../assets/words.txt";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { Terminal, type IBufferCell, type IBufferLine } from "@xterm/headless";
@@ -187,13 +191,25 @@ function cellAnsi(cell: IBufferCell | undefined): string {
 /** vim config: TUI theme + auto-save + app hotkeys, sourced after vimrc. */
 function vimrcContent(pal: ThemePalette): string {
   // Absolute path to the bundled English wordbase (see assets/words.txt).
-  // Read at runtime so the sourced vimrc always points at the real file,
-  // whatever the cwd or package layout.
+  // Source runs read the real file; compiled binaries have no assets on
+  // disk (import.meta.url resolves to /assets/words.txt inside $bunfs), so
+  // the embedded copy is materialized to a temp file — vim refuses a
+  // dictionary it can't stat as a filesystem path.
   let dict = "";
   try {
-    dict = fileURLToPath(new URL("../../assets/words.txt", import.meta.url));
+    const p = fileURLToPath(new URL("../../assets/words.txt", import.meta.url));
+    if (p.endsWith("words.txt") && existsSync(p)) dict = p;
   } catch {
-    // Asset missing (packaged build?) — fall back to no dictionary.
+    // Not a filesystem path at all — fall through to the temp materialization.
+  }
+  if (!dict) {
+    try {
+      const cached = join(tmpdir(), "fanaa-words.txt");
+      writeFileSync(cached, wordsTxt);
+      dict = cached;
+    } catch {
+      // Nowhere to write — fall back to no dictionary.
+    }
   }
   return [
     '" fanaa embedded editor — theme + hotkeys (sourced after the user\'s vimrc)',
