@@ -395,55 +395,55 @@ export function App() {
     setView("browse");
   };
 
-  /** vim exited: leave the editor immediately, then save. The git commit
-   *  runs in a continuation so the exit never stalls on disk/git latency —
-   *  the browse view paints the instant vim dies, then the result (flash +
-   *  refreshed list) appears when the save lands. */
+  /** vim exited: save synchronously, then flip to the browse view in a
+   *  single render. Doing the git commit before setEdit(null) means the
+   *  exit transition is ONE Ink frame (one screen clear) instead of two
+   *  (exit frame, then save result frame) — the double clear is what the
+   *  user saw as jitter on ESC. The commit is a local git op (~10-30ms),
+   *  so the brief stall is imperceptible next to the flash. */
   const finishEdit = (body: string) => {
     const s = edit;
-    setEdit(null);
-    editBusyRef.current = false;
-    setTimeout(() => {
-      let savedKey: string | null = null;
-      try {
-        if (s?.mode === "compose") {
-          const cleaned = body.replace(/\n+$/, "");
-          if (cleaned.trim() === "") {
-            setFlash("aborted \u2014 empty letter");
-          } else {
-            const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
-            savedKey = res.key;
-            setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
-          }
-        } else if (s?.mode === "edit") {
-          const res = editLetter(JOURNAL, s.key, body);
-          if (res.status === "saved") setFlash(`edited ${s.key}`);
-          else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
-          else setFlash("aborted \u2014 empty letter");
-          savedKey = s.key;
-        }
-      } catch (err) {
-        setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
-      }
-      const ls = loadLetters(JOURNAL);
-      setLetters(ls);
-      // Stay on the letter we just edited (or wrote) instead of snapping
-      // back to the top; fall back to 0 if it isn't in the current view
-      // (e.g. filtered out by an active search). An aborted compose leaves
-      // the selection untouched.
-      if (savedKey) {
-        if (timeline) {
-          const tr = buildTree(sortLetters(ls, "date"), collapsed);
-          const row = tr.rows.findIndex((r) => r.kind === "letter" && r.letter.key === savedKey);
-          setTIdx(row >= 0 ? row : 0);
+    let savedKey: string | null = null;
+    try {
+      if (s?.mode === "compose") {
+        const cleaned = body.replace(/\n+$/, "");
+        if (cleaned.trim() === "") {
+          setFlash("aborted \u2014 empty letter");
         } else {
-          const ordered = sortLetters(ls, sortMode);
-          const hay = q ? ordered.filter((l) => (l.meta.subject + "\n" + l.body).toLowerCase().includes(q)) : ordered;
-          const i = hay.findIndex((l) => l.key === savedKey);
-          setIdx(i >= 0 ? i : 0);
+          const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
+          savedKey = res.key;
+          setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
         }
+      } else if (s?.mode === "edit") {
+        const res = editLetter(JOURNAL, s.key, body);
+        if (res.status === "saved") setFlash(`edited ${s.key}`);
+        else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
+        else setFlash("aborted \u2014 empty letter");
+        savedKey = s.key;
       }
-    }, 0);
+    } catch (err) {
+      setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
+    }
+    const ls = loadLetters(JOURNAL);
+    setLetters(ls);
+    // Stay on the letter we just edited (or wrote) instead of snapping
+    // back to the top; fall back to 0 if it isn't in the current view
+    // (e.g. filtered out by an active search). An aborted compose leaves
+    // the selection untouched.
+    if (savedKey) {
+      if (timeline) {
+        const tr = buildTree(sortLetters(ls, "date"), collapsed);
+        const row = tr.rows.findIndex((r) => r.kind === "letter" && r.letter.key === savedKey);
+        setTIdx(row >= 0 ? row : 0);
+      } else {
+        const ordered = sortLetters(ls, sortMode);
+        const hay = q ? ordered.filter((l) => (l.meta.subject + "\n" + l.body).toLowerCase().includes(q)) : ordered;
+        const i = hay.findIndex((l) => l.key === savedKey);
+        setIdx(i >= 0 ? i : 0);
+      }
+    }
+    editBusyRef.current = false;
+    setEdit(null);
   };
 
   /** Delete a letter inline (was a CLI handoff; the git commit happens here). */
@@ -704,7 +704,7 @@ export function App() {
 
   if (view === "help") {
     return (
-      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
+      <Box flexDirection="column" height={rows - 1} alignItems="center" justifyContent="center">
         <HelpOverlay cols={cols} onClose={() => setView(helpReturn)} />
       </Box>
     );
@@ -712,7 +712,7 @@ export function App() {
 
   if (view === "compose") {
     return (
-      <Box flexDirection="column" height={rows} paddingX={2} paddingTop={3}>
+      <Box flexDirection="column" height={rows - 1} paddingX={2} paddingTop={3}>
         <Title />
         <Text color={MUTED}>a new letter — subject first, then vim</Text>
         <Box marginTop={1}>
@@ -734,7 +734,7 @@ export function App() {
   if (view === "sync") {
     // Cloud panel overlay — centered, like the help menu.
     return (
-      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
+      <Box flexDirection="column" height={rows - 1} alignItems="center" justifyContent="center">
         <SyncPanel
           cols={cols}
           rows={rows}
@@ -762,7 +762,7 @@ export function App() {
     // bare <Text> siblings are mixed with <Box> children in a centered
     // column ("no letters yet" vanished / texts merged — see repro3).
     return (
-      <Box flexDirection="column" height={rows} alignItems="center" justifyContent="center">
+      <Box flexDirection="column" height={rows - 1} alignItems="center" justifyContent="center">
         <Box>
           <Title />
         </Box>
