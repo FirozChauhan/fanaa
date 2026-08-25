@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { fanaaRoot, parseDateStamp, parseEntry, type EntryMeta } from "fanaa-core";
+import { fanaaRoot, isValidKey, parseDateStamp, parseEntry, type EntryMeta } from "fanaa-core";
 
 /**
  * In-memory letter model for the TUI: loads every entry from the store,
  * parses its frontmatter once, and provides the sort/search/timeline
- * orders. `key` is the full file key (YYYY-MM-DD-HHMM-XXXXXX), so sorting
+ * orders. `key` is the full file key (YYYY-MM-DD-HHMM-XXXX), so sorting
  * by key IS sorting by date.
  */
 
@@ -27,6 +27,7 @@ export function loadLetters(root?: string): Letter[] {
     const text = readFileSync(join(r, f), "utf8");
     const { meta, body } = parseEntry(text);
     const key = basename(f).replace(/\.md$/, "");
+    if (!isValidKey(key)) continue; // stray/foreign file — skip (never edit-crash)
     out.push({ key, date: parseDateStamp(meta.date), meta, body });
   }
   out.sort((a, b) => b.key.localeCompare(a.key));

@@ -33,7 +33,7 @@ export const LetterList = memo(function LetterList({
     <>
       {rows.map((l, i) => {
         const sel = i === selected;
-        // Unique entry ID = HHMM timestamp + 6-char hash ("1220EACOE3").
+        // Unique entry ID = HHMM timestamp + 4-char hash ("1220EACO").
         const id = l.key.slice(11, 15) + l.key.slice(16);
         const subjW = Math.max(4, width - 1 - id.length - 2);
         // Pad the subject so the selection background spans the full row width.

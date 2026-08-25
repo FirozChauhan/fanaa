@@ -70,13 +70,14 @@ each with its own history:
 
 ```
 ~/.fanaa/
-├── entries/2026/08/2026-08-24-0912-K7X2P9.md   # one letter = one file, unique ID
+├── entries/2026/08/2026-08-24-0912-K7X2.md   # one letter = one file, unique ID
 └── config.toml                          # identity defaults
 ```
 
-Every letter gets a unique key `YYYY-MM-DD-HHMM-XXXXXX` (`XXXXXX` is a
-6-character hash) and the frontmatter carries the concatenated ID
-(`id: 0912K7X2P9`). Old pre-hash letters are read without issue.
+Every letter gets a unique key `YYYY-MM-DD-HHMM-XXXX` (`XXXX` is a
+4-character hash) and the frontmatter carries the concatenated ID
+(`id: 0912K7X2`). Old letters with longer hashes (or no hash at all) are
+read without issue.
 
 ## Cloud sync
 

@@ -3,8 +3,8 @@ import { join } from "node:path";
 /**
  * Date & key utilities shared by every fanaa surface (CLI + TUI).
  *
- * A letter is one markdown file at `entries/YYYY/MM/YYYY-MM-DD-HHMM-XXXXXX.md`.
- * The FILE KEY (full `YYYY-MM-DD-HHMM-XXXXXX`) is the sort key used everywhere
+ * A letter is one markdown file at `entries/YYYY/MM/YYYY-MM-DD-HHMM-XXXX.md`.
+ * The FILE KEY (full `YYYY-MM-DD-HHMM-XXXX`) is the sort key used everywhere
  * (lists, the TUI timeline); the ID shown in the UI is the HHMM+hash tail (see
  * {@link entryIdFromKey}).
  */
@@ -63,7 +63,7 @@ export function parseDateStamp(s?: string): Date {
 
 /**
  * Matches a valid letter key: `YYYY-MM-DD-HHMM` with optional uniqueness
- * suffix segments (`-2`, `-K7X2P9`, `-K7X2P9-2` — dedup appends a counter
+ * suffix segments (`-2`, `-K7X2`, `-K7X2-2` — dedup appends a counter
  * after the hash). Anything else (paths, traversal, junk) is not a key and
  * must never be treated as one — keys become filesystem paths.
  */
@@ -83,28 +83,28 @@ export function entryPath(root: string, key: string): string {
   return join(root, "entries", y, m, `${key}.md`);
 }
 
-/** Key for a new letter file: YYYY-MM-DD-HHMM-XXXXXX — one letter, one file. */
+/** Key for a new letter file: YYYY-MM-DD-HHMM-XXXX — one letter, one file. */
 export function stampKey(base: string, d: Date): string {
   return `${base}-${pad(d.getHours())}${pad(d.getMinutes())}-${uniqueHash()}`;
 }
 
 let hashCounter = 0;
 
-/** 6-character unique hash (base36, uppercase) derived from the clock + a counter. */
+/** 4-character unique hash (base36, uppercase) derived from the clock + a counter. */
 export function uniqueHash(): string {
   const n = Date.now() * 1000 + (hashCounter++ % 1000);
-  // FNV-1a over the decimal digits, then base36 → 6 chars.
+  // FNV-1a over the decimal digits, then base36 → 4 chars.
   let h = 2166136261;
   for (const c of String(n)) {
     h ^= c.charCodeAt(0);
     h = Math.imul(h, 16777619);
   }
-  return (h >>> 0).toString(36).padStart(6, "0").slice(-6).toUpperCase();
+  return (h >>> 0).toString(36).padStart(4, "0").slice(-4).toUpperCase();
 }
 
 /**
- * The entry's unique ID: the HHMM timestamp concatenated with the 6-char
- * hash (e.g. "1214K7X2P9"). Old pre-hash keys just yield the HHMM part.
+ * The entry's unique ID: the HHMM timestamp concatenated with the 4-char
+ * hash (e.g. "1214K7X2"). Old pre-hash keys just yield the HHMM part.
  */
 export function entryIdFromKey(key: string): string {
   return key.slice(11, 15) + key.slice(16);
@@ -122,7 +122,7 @@ export function parseDateArg(s: string): string | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (/^\d{2}-\d{2}$/.test(s)) return `${now.getFullYear()}-${s}`;
   // Exact letter key: YYYY-MM-DD-HHMM with optional suffix segments
-  // (-2, -K7X2P9, -K7X2P9-2 — same shape KEY_RE enforces elsewhere).
+  // (-2, -K7X2, -K7X2-2 — same shape KEY_RE enforces elsewhere).
   if (/^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)*$/.test(s)) return s;
   return null;
 }

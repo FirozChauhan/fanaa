@@ -5,7 +5,9 @@ import { App } from "./app";
 
 /**
  * TUI entrypoint. Rendered by the CLI wrapper (`fanaa tui`) in a loop; this
- * process exits 66 to hand off editing to vim and 0 to quit (see packages/cli).
+ * process exits 0 to quit. Editing is in-process — vim runs inside the right
+ * pane (VimPane) and the app saves letters directly, so no exit-code handoff
+ * is needed (exit 66 remains a legacy CLI path for older frontends).
  *
  * exitOnCtrlC: false — the app handles ctrl+c itself (the editor needs it for
  * cancel/discard, and Ink's built-in exit would swallow the keypress).

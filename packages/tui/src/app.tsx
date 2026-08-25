@@ -1,19 +1,20 @@
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
-import { fanaaRoot, journalRoot } from "fanaa-core";
-import { loadSyncState } from "fanaa-sync";
+import { dayKey, editLetter, entryPath, fanaaRoot, journalRoot, parseEntry, removeLetter, writeLetter } from "fanaa-core";
+import { loadSyncState, recordDelete } from "fanaa-sync";
 import { loadLetters, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
 import { TimelineList, type TreeRow } from "./components/timelineList";
 import { LetterView } from "./components/letterView";
 import { SyncPanel } from "./components/syncPanel";
+import { VimPane } from "./components/vimPane";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
 
 // The wrapper passes the active journal category; entries live in its repo.
-import { readFileSync } from "node:fs";
 
 /**
  * The fanaa TUI — a full-screen Ink app with four views:
@@ -23,13 +24,13 @@ import { readFileSync } from "node:fs";
  *            months can be collapsed (▸) / expanded (▾)
  *   letter   focused reading pane — scrollable body, `n` jumps between
  *            #highlight# lines, `f` fullscreen
- *   compose  subject prompt that hands off to vim (see {@link handOff})
+ *   compose  subject prompt that opens the embedded editor (vim in the pane)
  *   help     keybinding popup
  *
- * Editing is deliberately out-of-process: the TUI writes the request to
- * `~/.fanaa/.tui-pending`, exits 66, and the CLI wrapper (packages/cli)
- * opens vim, saves the entry, and relaunches this app. That keeps raw
- * terminal input entirely inside one program instead of a TUI↔vim fight.
+ * Editing is in-process: vim runs inside the right pane (see VimPane), so
+ * the sidebar, top bar and footer stay visible while you write. The CLI
+ * wrapper's exit-66 handoff loop is kept for older frontends, but the TUI
+ * itself no longer uses it — saves are written and committed right here.
  */
 
 const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
@@ -37,6 +38,9 @@ const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
 
 type View = "browse" | "letter" | "compose" | "help" | "sync";
+
+/** An embedded vim session: a fresh letter, or a rewrite of an existing one. */
+type EditSession = { mode: "compose"; subject: string } | { mode: "edit"; key: string };
 
 const TITLE = "FANAA";
 const VERSION = JSON.parse(
@@ -286,6 +290,17 @@ export function App() {
   const [offset, setOffset] = useState(0);
   const [hlIdx, setHlIdx] = useState(-1); // -1 = before first highlight
   const [subject, setSubject] = useState("");
+  // Embedded editor session: vim in the right pane (null = not editing).
+  const [edit, setEdit] = useState<EditSession | null>(null);
+  // Bumped per session so VimPane remounts (fresh PTY) between letters.
+  const [editSeq, setEditSeq] = useState(0);
+  // Transient status line (saved / deleted / aborted) in the footer.
+  const [flash, setFlash] = useState("");
+  // Temp file backing the current editor session.
+  const editFileRef = useRef("");
+  // Guards startEdit against double-firing (TextInput onSubmit + useInput's
+  // glued-Enter branch can both see the same Enter keypress).
+  const editBusyRef = useRef(false);
   // Search + sort state (browse mode).
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -334,6 +349,13 @@ export function App() {
   const selected = order[fIdx];
   const tree = useMemo(() => (timeline ? buildTree(order, collapsed) : null), [timeline, order, collapsed]);
 
+  // Transient footer status line (saved/deleted/aborted) auto-clears.
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(""), 3000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
   // Exit cleanly when the terminal dies (stdin EOF, EIO, stdout EPIPE…)
   // so orphaned Ink processes don't busy-loop consuming 100% CPU.
   useEffect(() => {
@@ -353,18 +375,69 @@ export function App() {
   }, []);
 
   /**
-   * Hand off to the CLI wrapper: it opens vim on the letter body (git-commit
-   * style), writes/edits the entry, then relaunches this TUI. Pending payload:
-   *   new letter:  subject
-   *   edit letter: EDIT:<key>
+   * Open the embedded editor: prepare a temp file (empty for a new letter,
+   * the current body for an edit) and show vim in the right pane. vim's
+   * exit is reported back by VimPane → finishEdit.
    */
-  const handOff = (payload: string) => {
-    writeFileSync(join(STORE, ".tui-pending"), payload);
-    process.exit(66);
+  const startEdit = (s: EditSession) => {
+    if (editBusyRef.current) return; // idempotent: one session per Enter
+    editBusyRef.current = true;
+    const dir = mkdtempSync(join(tmpdir(), "fanaa-"));
+    editFileRef.current = join(dir, "entry.md");
+    if (s.mode === "edit") {
+      const { body } = parseEntry(readFileSync(entryPath(JOURNAL, s.key), "utf8"));
+      writeFileSync(editFileRef.current, body.replace(/\n+$/, ""));
+    } else {
+      writeFileSync(editFileRef.current, "");
+    }
+    setEditSeq((n) => n + 1);
+    setEdit(s);
+    setView("browse");
+  };
+
+  /** vim exited: save or abort, then reload the letter list. */
+  const finishEdit = (body: string) => {
+    const s = edit;
+    try {
+      if (s?.mode === "compose") {
+        const cleaned = body.replace(/\n+$/, "");
+        if (cleaned.trim() === "") {
+          setFlash("aborted \u2014 empty letter");
+        } else {
+          const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
+          setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
+        }
+      } else if (s?.mode === "edit") {
+        const res = editLetter(JOURNAL, s.key, body);
+        if (res.status === "saved") setFlash(`edited ${s.key}`);
+        else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
+        else setFlash("aborted \u2014 empty letter");
+      }
+    } catch (err) {
+      setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
+    }
+    setEdit(null);
+    editBusyRef.current = false;
+    setLetters(loadLetters(JOURNAL));
+    setIdx(0);
+  };
+
+  /** Delete a letter inline (was a CLI handoff; the git commit happens here). */
+  const doDelete = (key: string) => {
+    try {
+      const res = removeLetter(JOURNAL, key);
+      recordDelete(STORE, CATEGORY, key);
+      setFlash(`deleted ${key} (${res.subject})`);
+    } catch (err) {
+      setFlash(`delete failed: ${err instanceof Error ? err.message : err}`);
+    }
+    setLetters(loadLetters(JOURNAL));
+    setIdx(0);
   };
 
   useInput((input, key) => {
     if (splash) return; // Splash owns the input until it advances
+    if (edit) return; // vim in the right pane owns the keys (VimPane forwards stdin)
     if (view === "sync") return; // SyncPanel owns its keys (and ctrl+c)
     if (view === "compose") {
       if (key.escape) setView("browse");
@@ -375,7 +448,7 @@ export function App() {
         // detect the newline ourselves and submit on the pre-newline text.
         const merged = subject + input;
         const i = merged.search(/[\r\n]/);
-        handOff(merged.slice(0, i).trim());
+        startEdit({ mode: "compose", subject: merged.slice(0, i).trim() });
       }
       return;
     }
@@ -387,8 +460,8 @@ export function App() {
         const next = (hlIdx + 1) % hlLines.length;
         setHlIdx(next);
         setOffset(Math.min(hlLines[next], maxOffset));
-      } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
-      else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
+      } else if (input === "e" && selected) startEdit({ mode: "edit", key: selected.key });
+      else if (input === "d" && selected) doDelete(selected.key);
       else if (input === "p") setView("sync");
       else if (input === "h" || input === "?") {
         setHelpReturn("letter");
@@ -468,8 +541,8 @@ export function App() {
       } else if (input === "a") {
         setSubject("");
         setView("compose");
-      } else if (input === "e" && rowLetter) handOff(`EDIT:${rowLetter.key}`);
-      else if (input === "d" && rowLetter) handOff(`DELETE:${rowLetter.key}`);
+      } else if (input === "e" && rowLetter) startEdit({ mode: "edit", key: rowLetter.key });
+      else if (input === "d" && rowLetter) doDelete(rowLetter.key);
       else if (input === "p") setView("sync");
       else if (input === "h" || input === "?") {
         setHelpReturn("browse");
@@ -518,8 +591,8 @@ export function App() {
     } else if (input === "a") {
       setSubject("");
       setView("compose");
-    } else if (input === "e" && selected) handOff(`EDIT:${selected.key}`);
-    else if (input === "d" && selected) handOff(`DELETE:${selected.key}`);
+    } else if (input === "e" && selected) startEdit({ mode: "edit", key: selected.key });
+    else if (input === "d" && selected) doDelete(selected.key);
     else if (input === "p") setView("sync");
     else if (input === "h" || input === "?") {
       setHelpReturn("browse");
@@ -534,11 +607,15 @@ export function App() {
   // must NOT skip them — hooks must run on every render or React throws
   // "Rendered fewer hooks than expected").
   const inLetter = view === "letter";
+  const editing = edit !== null;
   const full = inLetter && letterFull;
   const listW = Math.min(42, Math.floor(cols * 0.38));
-  const showPreview = inLetter || cols >= 62;
+  // Editing forces the preview pane on (even on narrow terminals) so vim
+  // always has its window; the search bar is suppressed so the pane origin
+  // stays at a fixed screen position.
+  const showPreview = editing || inLetter || cols >= 62;
   const previewW = showPreview ? (full ? cols - 2 : cols - listW - 2) : 0;
-  const listH = Math.max(3, rows - 4 - (searching ? 1 : 0));
+  const listH = Math.max(3, rows - 4 - (searching && !editing ? 1 : 0));
 
   // Selection: flat mode picks the letter at idx; timeline mode picks the tree
   // row at tIdx (a month/year row has no letter → preview hides).
@@ -601,7 +678,7 @@ export function App() {
           <TextInput
             value={subject}
             onChange={setSubject}
-            onSubmit={() => handOff(subject.trim())}
+            onSubmit={() => startEdit({ mode: "compose", subject: subject.trim() })}
             placeholder="(no subject)"
           />
         </Box>
@@ -636,7 +713,7 @@ export function App() {
 
   if (view === "letter") {
     // letter shares the split layout below; fullscreen is a pane-level toggle
-  } else if (letters.length === 0) {
+  } else if (letters.length === 0 && !editing) {
     // All children must be Boxes: Ink/Yoga corrupts text measurement when
     // bare <Text> siblings are mixed with <Box> children in a centered
     // column ("no letters yet" vanished / texts merged — see repro3).
@@ -675,8 +752,8 @@ export function App() {
       </Box>
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 
-      {/* search bar (browse only) */}
-      {searching && view === "browse" && (
+      {/* search bar (browse only; hidden while editing so vim keeps its pane) */}
+      {searching && view === "browse" && !editing && (
         <Box paddingX={1} height={1}>
           <Text bold color={ACCENT}>
             /
@@ -724,7 +801,7 @@ export function App() {
             )}
           </Box>
         )}
-        {!full && showPreview && effectiveSelected && (
+        {!full && showPreview && (editing || effectiveSelected) && (
           <Box flexDirection="column" width={1}>
             {Array.from({ length: dividerLines }).map((_, i) => (
               <Text key={i} color={DIVIDER}>
@@ -733,18 +810,31 @@ export function App() {
             ))}
           </Box>
         )}
-        {showPreview && effectiveSelected && (
+        {showPreview && (editing || effectiveSelected) && (
           // Clip the letter to the pane: an auto-height preview column that
           // overflows its row corrupts Yoga's layout of the whole tree (the
           // header's children get laid out at y=-1 and vanish from the output).
           <Box flexDirection="column" width={previewW} marginLeft={1} height={listH} overflowY="hidden">
-            <LetterView
-              letter={effectiveSelected}
-              width={previewW}
-              height={listH}
-              offset={inLetter ? offset : 0}
-              highlightSubject={inLetter}
-            />
+            {editing ? (
+              // Embedded vim: the sidebar and top bar stay visible while the
+              // editor owns the right pane.
+              <VimPane
+                key={editSeq}
+                width={previewW}
+                height={listH}
+                file={editFileRef.current}
+                start={edit.mode === "compose" ? "insert" : "append"}
+                onExit={finishEdit}
+              />
+            ) : effectiveSelected ? (
+              <LetterView
+                letter={effectiveSelected}
+                width={previewW}
+                height={listH}
+                offset={inLetter ? offset : 0}
+                highlightSubject={inLetter}
+              />
+            ) : null}
           </Box>
         )}
       </Box>
@@ -752,33 +842,47 @@ export function App() {
       {/* footer */}
       <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
-        <Text color={MUTED}>{VERSION}</Text>
-        <Text color={FAINT}> · </Text>
-        {!timeline && (
+        {editing ? (
+          <Text color={FAINT}>
+            vim · <Text color={MUTED}>insert mode</Text> · <Text color={MUTED}>ctrl+s</Text> save · <Text color={MUTED}>ctrl+q</Text> close · <Text color={MUTED}>ctrl+c</Text> interrupt
+          </Text>
+        ) : (
           <>
+            <Text color={MUTED}>{VERSION}</Text>
+            <Text color={FAINT}> · </Text>
+            {!timeline && (
+              <>
+                <Text color={FAINT}>
+                  <Text color={MUTED}>S</Text>: {sortMode}
+                </Text>
+                <Text color={FAINT}> · </Text>
+              </>
+            )}
             <Text color={FAINT}>
-              <Text color={MUTED}>S</Text>: {sortMode}
+              <Text color={MUTED}>T</Text>: {timeline ? "timeline" : "list"}
             </Text>
             <Text color={FAINT}> · </Text>
+            <Text color={FAINT}>
+              <Text color={MUTED}>H</Text>: Help
+            </Text>
+            <Text color={FAINT}> · </Text>
+            <Text color={FAINT}>
+              <Text color={MUTED}>P</Text>: sync
+            </Text>
+            {q && !searching && view === "browse" && (
+              <>
+                <Text color={FAINT}> · </Text>
+                <Text color={AMBER}>
+                  /{q}/ ({filtered.length})
+                </Text>
+              </>
+            )}
           </>
         )}
-        <Text color={FAINT}>
-          <Text color={MUTED}>T</Text>: {timeline ? "timeline" : "list"}
-        </Text>
-        <Text color={FAINT}> · </Text>
-        <Text color={FAINT}>
-          <Text color={MUTED}>H</Text>: Help
-        </Text>
-        <Text color={FAINT}> · </Text>
-        <Text color={FAINT}>
-          <Text color={MUTED}>P</Text>: sync
-        </Text>
-        {q && !searching && view === "browse" && (
+        {flash && (
           <>
             <Text color={FAINT}> · </Text>
-            <Text color={AMBER}>
-              /{q}/ ({filtered.length})
-            </Text>
+            <Text color={AMBER}>{flash}</Text>
           </>
         )}
       </Box>

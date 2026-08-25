@@ -7,7 +7,7 @@
     },
     "packages/api": {
       "name": "fanaa-api",
-      "version": "0.2.0",
+      "version": "0.7.2",
       "dependencies": {
         "@neondatabase/serverless": "^1.1.0",
         "hono": "^4.13.4",
@@ -21,7 +21,7 @@
     },
     "packages/cli": {
       "name": "fanaa",
-      "version": "0.2.0",
+      "version": "0.7.2",
       "bin": {
         "fanaa": "src/index.ts",
       },
@@ -35,14 +35,14 @@
     },
     "packages/core": {
       "name": "fanaa-core",
-      "version": "0.2.0",
+      "version": "0.7.2",
       "devDependencies": {
         "@types/bun": "latest",
       },
     },
     "packages/sync": {
       "name": "fanaa-sync",
-      "version": "0.2.0",
+      "version": "0.7.2",
       "dependencies": {
         "fanaa-core": "workspace:*",
       },
@@ -52,11 +52,12 @@
     },
     "packages/tui": {
       "name": "fanaa-tui",
-      "version": "0.2.0",
+      "version": "0.7.2",
       "bin": {
         "fanaa-tui": "src/index.tsx",
       },
       "dependencies": {
+        "@xterm/headless": "^6.0.0",
         "fanaa-core": "workspace:*",
         "fanaa-sync": "workspace:*",
         "ink": "^5.0.1",
@@ -223,6 +224,8 @@
     "@types/prop-types": ["@types/prop-types@15.7.15", "", {}, "sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw=="],
 
     "@types/react": ["@types/react@18.3.31", "", { "dependencies": { "@types/prop-types": "*", "csstype": "^3.2.2" } }, "sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw=="],
+
+    "@xterm/headless": ["@xterm/headless@6.0.0", "", {}, "sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw=="],
 
     "ansi-escapes": ["ansi-escapes@7.3.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg=="],
 

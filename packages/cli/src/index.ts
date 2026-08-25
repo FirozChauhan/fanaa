@@ -1,13 +1,11 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, basename, join } from "node:path";
+import { basename, join } from "node:path";
 import { loadConfig, saveConfig } from "./config";
-import { dayKey, entryIdFromKey, entryPath, journalRoot, localISO, parseDayKey, parseDateArg, stampKey } from "fanaa-core";
+import { dayKey, editLetter, entryPath, gitEmail, journalRoot, parseDateArg, parseEntry, removeLetter, writeLetter } from "fanaa-core";
 import { composeLines } from "./editor";
-import { parseEntry, serializeEntry, type EntryMeta } from "fanaa-core";
-import { commitEntry, gitEmail } from "./git";
 import { listEntries } from "./list";
 import { fanaaRoot } from "fanaa-core";
 import { pipedInput, promptText } from "./prompt";
@@ -55,14 +53,6 @@ Usage:
 Piping:
   echo -e "subject\nbody line" | fanaa        letter from stdin
   echo "body" | fanaa add -s "subject"        quick letter from stdin`);
-}
-
-/** Stamp a date for storage. Backdated entries keep the target day. */
-function stampFor(dateKey: string): string {
-  const base = parseDayKey(dateKey);
-  const now = new Date();
-  base.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
-  return localISO(base);
 }
 
 /** The editor used for letter bodies: vim by default, FANAA_EDITOR to override. */
@@ -141,14 +131,6 @@ async function cmdWrite(opts: {
   }
   subject = subject || "";
   const root = journalStore(category);
-  // One letter = one file: key YYYY-MM-DD-HHMM, deduped with -2, -3…
-  const now = new Date();
-  let key = stampKey(opts.dateKey, now);
-  for (let n = 2; existsSync(entryPath(root, key)); n++) {
-    key = `${stampKey(opts.dateKey, now)}-${n}`;
-  }
-  const p = entryPath(root, key);
-  mkdirSync(dirname(p), { recursive: true });
 
   // Every capture is a fresh letter; nothing is merged or pre-filled.
   let newBody: string;
@@ -164,63 +146,39 @@ async function cmdWrite(opts: {
   } else {
     newBody = pipedInput();
   }
-  newBody = newBody.replace(/\n+$/, "");
 
-  if (newBody.trim() === "") {
+  if (newBody.replace(/\n+$/, "").trim() === "") {
     console.log("Aborting fanaa due to empty entry.");
     return;
   }
 
-  const meta: EntryMeta = {
-    date: stampFor(key),
-    id: entryIdFromKey(key),
-    from,
-    to,
-    subject,
-  };
-  writeFileSync(p, serializeEntry(meta, newBody));
-  const rev = commitEntry(root, p, subject || "(no subject)");
-  const tail = rev ? `  [git: ${rev}]` : "";
-  console.log(`\n\u001b[32m\u2713\u001b[0m saved (${key}) as ${from} \u2192 ${to}${tail}`);
+  const res = writeLetter({ root, dateKey: opts.dateKey, from, to, subject, body: newBody });
+  const tail = res.rev ? `  [git: ${res.rev}]` : "";
+  console.log(`\n\u001b[32m\u2713\u001b[0m saved (${res.key}) as ${res.from} \u2192 ${res.to}${tail}`);
 }
 
 /** Rewrite an existing letter's body; frontmatter (date/from/to/subject) is kept. */
 async function cmdEdit(key: string, newBody: string, category = activeCategory()): Promise<void> {
   const root = journalStore(category);
-  const p = entryPath(root, key);
-  if (!existsSync(p)) {
-    console.error(`No letter found at ${key}.`);
-    process.exitCode = 1;
-    return;
-  }
-  const text = readFileSync(p, "utf8");
-  const { meta, body } = parseEntry(text);
-  const cleaned = newBody.replace(/\n+$/, "");
-  if (cleaned.trim() === "") {
+  const res = editLetter(root, key, newBody);
+  if (res.status === "aborted") {
     console.log("Aborting fanaa due to empty entry.");
     return;
   }
-  writeFileSync(p, serializeEntry(meta, cleaned));
-  const rev = commitEntry(root, p, `edit: ${meta.subject || "(no subject)"}`);
-  const tail = rev ? `  [git: ${rev}]` : "";
+  if (res.status === "unchanged") {
+    console.log("No changes — nothing saved.");
+    return;
+  }
+  const tail = res.rev ? `  [git: ${res.rev}]` : "";
   console.log(`\n\u001b[32m\u2713\u001b[0m edited ${key}${tail}`);
 }
 
 /** Delete a letter and commit the removal. */
 async function cmdDelete(key: string, category = activeCategory()): Promise<void> {
   const root = journalStore(category);
-  const p = entryPath(root, key);
-  if (!existsSync(p)) {
-    console.error(`No letter found at ${key}.`);
-    process.exitCode = 1;
-    return;
-  }
-  const { meta } = parseEntry(readFileSync(p, "utf8"));
-  rmSync(p);
-  const subj = meta.subject || "(no subject)";
-  const rev = commitEntry(root, p, `delete: ${subj}`);
+  const { subject, rev } = removeLetter(root, key);
   const tail = rev ? `  [git: ${rev}]` : "";
-  console.log(`\u001b[31m\u2717\u001b[0m deleted ${key} (${subj})${tail}`);
+  console.log(`\u001b[31m\u2717\u001b[0m deleted ${key} (${subject})${tail}`);
   recordDelete(fanaaRoot(), category, key);
 }
 
