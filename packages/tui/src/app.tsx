@@ -477,6 +477,14 @@ export function App() {
       }
       return;
     }
+    // Ctrl+letter combos are terminal control chars, NOT app keys: Ctrl-D is
+    // EOF/EOT (a terminal sending it on disconnect would otherwise DELETE the
+    // selected letter), Ctrl-H is backspace, Ctrl-P/Q/R/S are readline/flow,
+    // Ctrl-E/A/G/J/K are line/scroll controls. Guard them all here so they
+    // never reach the bare-letter handlers below. Ctrl-C (exit) is handled
+    // first in every view.
+    if (key.ctrl && input === "c") process.exit(0);
+    if (key.ctrl) return;
     if (view === "letter") {
       if (key.downArrow || input === "j") setOffset((o) => Math.min(maxOffset, o + 1));
       else if (key.upArrow || input === "k") setOffset((o) => Math.max(0, o - 1));
@@ -782,14 +790,17 @@ export function App() {
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
 
-  // While vim is open the pane frame must stay one row shorter than the
-  // terminal (rows - 1): with the footer divider hidden the app's natural
-  // height is exactly rows, which makes Ink take the clearTerminal (2J)
-  // path on every keystroke frame — the full-screen flash/lag. Shrinking
-  // the root by one row drops the frame below the threshold so Ink redraws
-  // incrementally (eraseLines) instead.
+  // While vim is open the pane frame stays at the full terminal height so
+  // Ink keeps taking the clearTerminal (2J) path on every frame: a shorter
+  // (rows - 1) frame flips Ink into its log-update eraseLines path, and on
+  // that transition log-update's line count is still 0 (the browse frame
+  // went through clearTerminal), so the first edit frame is written at the
+  // cursor's last position — the bottom of the browse frame — gluing the
+  // title to the browse footer and pushing the app footer off its row.
+  // Typing itself never re-renders the app (VimPane's overlay handles it),
+  // so staying at rows costs no per-keystroke clear.
   return (
-    <Box flexDirection="column" height={editing ? rows - 1 : rows}>
+    <Box flexDirection="column" height={rows}>
       {/* header */}
       <Box paddingX={1} alignItems="center">
         <Title />
@@ -881,9 +892,11 @@ export function App() {
                   // title(1) + divider(1) + the preview column's letterhead(5)
                   // sit above the pane → it starts at the 8th output line; the
                   // sidebar(listW) + divider column(1) + margin(1) sit to its
-                  // left → it starts at column listW+2 (1-based).
+                  // left → content starts at column listW+3 (1-based; listW+2
+                  // is the margin column — painting there puts vim flush
+                  // against the divider with no gap).
                   rowOffset={8}
-                  colOffset={listW + 2}
+                  colOffset={listW + 3}
                   rows={rows}
                 />
               </>
