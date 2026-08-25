@@ -235,7 +235,9 @@ function vimrcContent(): string {
     '" app close key: esc = close (saves + exits) — matches the app\'s',
     '" esc/back convention. Saving is automatic:',
     '" every keystroke writes via TextChangedI and exit writes via VimLeavePre.',
-    "inoremap <Esc> <C-o>:x<CR>",
+    '" If the completion popup is open, esc first cancels it, then closes',
+    '" the editor — one press either way (no stuck-in-menu escapes).',
+    "inoremap <expr> <Esc> pumvisible() ? \"\\<C-e>\\<C-o>:x\\<CR>\" : \"\\<C-o>:x\\<CR>\"",
     "nnoremap <Esc> :x<CR>",
   ].join("\n") + "\n";
 }
