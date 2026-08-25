@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { Terminal, type IBufferCell, type IBufferLine } from "@xterm/headless";
-import { ACCENT, AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG } from "../util";
+import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
 
 /**
  * The embedded editor: a real terminal program (vim by default) running in
@@ -150,14 +150,16 @@ function vimrcContent(): string {
     "set termguicolors",
     "set background=dark",
     "set noswapfile nobackup nowritebackup",
-    "set laststatus=2 number cursorline",
+    '" minimal chrome: no line numbers, no statusline, no mode line, no ~ fill',
+    "set nonumber",
+    "set norelativenumber",
+    "set signcolumn=auto",
+    "set laststatus=0",
+    "set noshowmode",
+    "set fillchars+=eob:\\ ",
+    "set cursorline",
     `hi Normal guifg=${DEFAULT_FG} guibg=${DEFAULT_BG}`,
-    `hi EndOfBuffer guifg=${FAINT}`,
-    `hi LineNr guifg=${FAINT}`,
-    `hi CursorLineNr guifg=${GOLD}`,
     "hi CursorLine guibg=#2a251e",
-    `hi StatusLine guifg=${DEFAULT_BG} guibg=${DEFAULT_FG}`,
-    `hi StatusLineNC guifg=${MUTED} guibg=${SEL_BG}`,
     `hi Visual guifg=${DEFAULT_BG} guibg=${ACCENT}`,
     `hi Search guifg=${DEFAULT_BG} guibg=${AMBER}`,
     `hi MatchParen guifg=${GOLD}`,
