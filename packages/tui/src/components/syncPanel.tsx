@@ -26,7 +26,7 @@ import { usePalette } from "../theme";
  * happened. `esc` always takes you back to the journal.
  */
 
-type Phase = "idle" | "busy" | "email" | "code" | "name";
+type Phase = "idle" | "busy" | "email" | "code" | "name" | "api";
 type NameCtx = "signup" | "edit";
 
 // NOTE: keep panel titles free of ambiguous-width glyphs (⚡ etc.) — they
@@ -85,6 +85,7 @@ export function SyncPanel({
   const [verificationId, setVerificationId] = useState<string | undefined>(undefined);
   const [nameInput, setNameInput] = useState("");
   const [nameCtx, setNameCtx] = useState<NameCtx>("signup");
+  const [apiUrlInput, setApiUrlInput] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,6 +93,14 @@ export function SyncPanel({
   const signedIn = state.token !== "";
   const j = state.journals[category];
 
+  /** Format an error, hinting at the API url when the server was unreachable. */
+  const fmtErr = (e: unknown): string => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/fetch failed|ECONNREFUSED|ENOTFOUND|Undici|network|unable to connect/i.test(msg)) {
+      return `${msg} \u2014 can't reach ${apiUrl} (u to change, or set FANAA_API_URL)`;
+    }
+    return msg;
+  };
   const refresh = useCallback(
     (next: typeof state) => {
       saveSyncState(storeRoot, next);
@@ -122,7 +131,7 @@ export function SyncPanel({
           : `\u2713 sync done: ${parts.join(" \u00b7 ")}`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(fmtErr(e));
       setMessage(null);
     }
     setPhase("idle");
@@ -143,7 +152,7 @@ export function SyncPanel({
       );
       setPhase("code");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(fmtErr(e));
       setMessage(null);
       setPhase("idle");
     }
@@ -173,7 +182,7 @@ export function SyncPanel({
         await doSync();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(fmtErr(e));
       setMessage(null);
       setPhase("idle");
     }
@@ -194,11 +203,26 @@ export function SyncPanel({
       setPhase("idle");
       if (nameCtx === "signup") await doSync();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(fmtErr(e));
       setMessage(null);
       setPhase("idle");
     }
   }, [nameInput, nameCtx, apiUrl, storeRoot, refresh, doSync]);
+
+  /** Save the API base URL (normalizes a trailing slash). */
+  const saveApiUrl = useCallback(() => {
+    const url = apiUrlInput.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\/\S+$/.test(url)) {
+      setError("invalid url \u2014 need http(s)://host[:port]");
+      return;
+    }
+    const s = loadSyncState(storeRoot);
+    s.apiUrl = url;
+    refresh(s);
+    setError(null);
+    setMessage(`api url set to ${url}`);
+    setPhase("idle");
+  }, [apiUrlInput, storeRoot, refresh]);
 
   /** Sign out: revoke server-side (best-effort), drop the local token+name. */
   const doLogout = useCallback(() => {
@@ -231,9 +255,22 @@ export function SyncPanel({
       }
       return;
     }
+    if (phase === "api") {
+      // TextInput owns typing; esc cancels back to the status view.
+      if (key.escape) {
+        setPhase("idle");
+        setError(null);
+      }
+      return;
+    }
     if (phase === "busy") return; // a sync/login is in flight
     if (key.escape || input === "q") {
       onClose();
+    } else if (input === "u") {
+      setApiUrlInput("");
+      setError(null);
+      setMessage("api base url \u2014 where the sync server lives");
+      setPhase("api");
     } else if (!signedIn && (input === "l" || key.return)) {
       setEmail("");
       setCode("");
@@ -355,6 +392,35 @@ export function SyncPanel({
     );
   }
 
+  if (phase === "api") {
+    return (
+      <PanelBox cols={cols} rows={rows}>
+        <Text bold color={pal.gold}>
+          API URL
+        </Text>
+        <Text color={pal.muted}>where the sync server lives (FANAA_API_URL overrides it)</Text>
+        <Text color={pal.faint}>current: {apiUrl}</Text>
+        <Box marginTop={1}>
+          <Text bold color={pal.accent}>
+            {"\u276f"} {" "}
+          </Text>
+          <TextInput
+            value={apiUrlInput}
+            onChange={setApiUrlInput}
+            onSubmit={() => void saveApiUrl()}
+            placeholder="https://api.example.com"
+          />
+        </Box>
+        <Text color={pal.faint}>enter = save · esc = cancel</Text>
+        {error && (
+          <Text color="#e07a5f">
+            {"\u2717"} {error}
+          </Text>
+        )}
+      </PanelBox>
+    );
+  }
+
   // ----- status + actions -----
   return (
     <PanelBox cols={cols} rows={rows}>
@@ -388,6 +454,10 @@ export function SyncPanel({
         </Box>
       )}
       <Box flexDirection="column" marginTop={1}>
+        <Text>
+          <Text bold color={pal.accent}>u</Text>
+          <Text color={pal.muted}>  change api url</Text>
+        </Text>
         {signedIn ? (
           <>
             <Text>

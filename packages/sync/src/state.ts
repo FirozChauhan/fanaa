@@ -42,7 +42,10 @@ export interface SyncState {
 }
 
 const DEFAULTS = {
-  apiUrl: "http://localhost:8787",
+  // Build/publish-time baked default (FANAA_DEFAULT_API_URL), so the npm
+  // build can point at a hosted deployment without code changes. Falls back
+  // to localhost for local development/self-hosting.
+  apiUrl: process.env.FANAA_DEFAULT_API_URL || "http://localhost:8787",
   email: "",
   name: "",
   token: "",
