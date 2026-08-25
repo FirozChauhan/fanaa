@@ -15,7 +15,7 @@ import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
  * App's useInput handler is gated off while editing, so vim alone sees the
  * keys — including ctrl+c, which vim handles itself).
  *
- * Cursor: rendered in-frame as a reverse-video block at the emulated cursor
+ * Cursor: rendered in-frame as a thin underline under the emulated cursor
  * position — exactly how a real terminal emulator draws its own cursor. No
  * ANSI cursor escapes are ever written to stdout, so Ink's incremental
  * frame erasing (which assumes the real cursor never moves) stays intact.
@@ -23,7 +23,7 @@ import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
  * vim integration: a small config file is written next to the temp file and
  * sourced after the user's vimrc — it applies the TUI's warm paper-and-ink
  * palette (termguicolors + highlight groups), auto-saves on every change and
- * on exit, and adds app hotkeys (ctrl+s save, ctrl+q close).
+ * on exit, and adds the app close hotkey (ctrl+q).
  */
 
 // Warm defaults that match the app's paper-on-ink look (used when reverse
@@ -73,7 +73,7 @@ type Style = {
 /**
  * Turn one emulated buffer line into styled Ink spans (cells grouped by
  * style). cursorX (a buffer column) marks the editor's cursor cell, which is
- * drawn as a reverse-video block — the terminal-emulator cursor.
+ * drawn as a thin underline — the terminal-emulator cursor.
  */
 function renderLine(line: IBufferLine | undefined, width: number, cursorX?: number): React.ReactNode {
   if (!line) return " ".repeat(width);
@@ -110,20 +110,17 @@ function renderLine(line: IBufferLine | undefined, width: number, cursorX?: numb
       fg = newFg;
       bg = newBg;
     }
-    // Terminal-style block cursor over this cell (reverse of what's rendered).
-    if (x === cursorX) {
-      const newFg = bg ?? DEFAULT_BG;
-      const newBg = fg ?? DEFAULT_FG;
-      fg = newFg;
-      bg = newBg;
-    }
+    // Thin cursor: a slim underline under the insertion point (block cursor
+    // replaced by this in the previous change) — paints no background, so the
+    // editor blends with the app chrome instead of showing a dark rectangle.
+    const cursorHere = x === cursorX;
     const style: Style = {
       text: cell.getChars() || " ",
       fg,
       bg,
       bold: cell.isBold() === 1,
       dim: cell.isDim() === 1,
-      underline: cell.isUnderline() === 1,
+      underline: cell.isUnderline() === 1 || cursorHere,
     };
     if (
       !cur ||
@@ -157,9 +154,7 @@ function vimrcContent(): string {
     "set laststatus=0",
     "set noshowmode",
     "set fillchars+=eob:\\ ",
-    "set cursorline",
-    `hi Normal guifg=${DEFAULT_FG} guibg=${DEFAULT_BG}`,
-    "hi CursorLine guibg=#2a251e",
+    `hi Normal guifg=${DEFAULT_FG}`,
     `hi Visual guifg=${DEFAULT_BG} guibg=${ACCENT}`,
     `hi Search guifg=${DEFAULT_BG} guibg=${AMBER}`,
     `hi MatchParen guifg=${GOLD}`,
@@ -169,9 +164,8 @@ function vimrcContent(): string {
     '" a plain :q quits cleanly instead of E37) and once more on any exit.',
     "au TextChangedI,TextChanged * sil! write",
     "au VimLeavePre * sil! write",
-    '" app hotkeys: ctrl+s = save, ctrl+q = close (writes if modified).',
-    "inoremap <C-s> <Esc>:sil! write<CR>gi",
-    "nnoremap <C-s> :sil! write<CR>",
+    '" app hotkey: ctrl+q = close (writes if modified). Saving is automatic:',
+    '" every keystroke writes via TextChangedI and exit writes via VimLeavePre.',
     "inoremap <C-q> <Esc>:x<CR>",
     "nnoremap <C-q> :x<CR>",
   ].join("\n") + "\n";
