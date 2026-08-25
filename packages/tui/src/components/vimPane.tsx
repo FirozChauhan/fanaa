@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { Terminal, type IBufferCell, type IBufferLine } from "@xterm/headless";
@@ -185,6 +186,15 @@ function cellAnsi(cell: IBufferCell | undefined): string {
 
 /** vim config: TUI theme + auto-save + app hotkeys, sourced after vimrc. */
 function vimrcContent(): string {
+  // Absolute path to the bundled English wordbase (see assets/words.txt).
+  // Read at runtime so the sourced vimrc always points at the real file,
+  // whatever the cwd or package layout.
+  let dict = "";
+  try {
+    dict = fileURLToPath(new URL("../../assets/words.txt", import.meta.url));
+  } catch {
+    // Asset missing (packaged build?) — fall back to no dictionary.
+  }
   return [
     '" fanaa embedded editor — theme + hotkeys (sourced after the user\'s vimrc)',
     "set termguicolors",
@@ -194,6 +204,14 @@ function vimrcContent(): string {
     '" so a lone ESC (close) fires quickly; arrow sequences still arrive',
     '" atomically from a real terminal and decode fine.',
     "set ttimeout ttimeoutlen=25",
+    '" dictionary auto-completion: a bundled wordbase of common English',
+    '" terms powers <C-n>/<C-p> (and <C-x><C-k>) in insert mode. The menu',
+    '" shows one item even for a single match, extends the longest common',
+    '" prefix as you keep typing, and never auto-selects (Enter/typing',
+    '" inserts; the list is only a suggestion).',
+    dict ? `set dictionary=${dict.replace(/ /g, "\\ ")}` : "\" dictionary missing",
+    "set complete+=k",
+    "set completeopt=menuone,longest,noselect",
     '" minimal chrome: no line numbers, no statusline, no mode line, no ~ fill',
     "set nonumber",
     "set norelativenumber",
