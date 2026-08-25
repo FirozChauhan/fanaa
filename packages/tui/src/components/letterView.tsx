@@ -2,7 +2,8 @@ import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
-import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, clean, truncate, wrapBodyCached } from "../util";
+import { clean, truncate, wrapBodyCached } from "../util";
+import { usePalette } from "../theme";
 
 /** Wrap email addresses in angle brackets; names ("ME") stay bare. */
 const email = (v: string) => (v.includes("@") ? `<${clean(v)}>` : clean(v));
@@ -21,32 +22,33 @@ export const LetterHeader = memo(function LetterHeader({
   width: number;
   highlightSubject?: boolean;
 }) {
+  const pal = usePalette();
   const m = letter.meta;
   const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
   const rule = "\u2500".repeat(Math.max(4, width - 2));
   return (
     <>
       <Text>
-        <Text color={FAINT}>Date:    </Text>
-        <Text color={PAPER}>
+        <Text color={pal.faint}>Date:    </Text>
+        <Text color={pal.paper}>
           {rfcDate(letter.date).toUpperCase()}  {time}
         </Text>
       </Text>
       <Text>
-        <Text color={FAINT}>From:    </Text>
-        <Text color={MUTED}>{truncate(email(m.from || ""), Math.max(4, width - 12))}</Text>
+        <Text color={pal.faint}>From:    </Text>
+        <Text color={pal.muted}>{truncate(email(m.from || ""), Math.max(4, width - 12))}</Text>
       </Text>
       <Text>
-        <Text color={FAINT}>To:      </Text>
-        <Text color={ACCENT}>{truncate(email(m.to || ""), Math.max(4, width - 12))}</Text>
+        <Text color={pal.faint}>To:      </Text>
+        <Text color={pal.accent}>{truncate(email(m.to || ""), Math.max(4, width - 12))}</Text>
       </Text>
       <Text>
-        <Text color={FAINT}>Subject: </Text>
-        <Text bold backgroundColor={highlightSubject ? SEL_BG : undefined} color={GOLD}>
+        <Text color={pal.faint}>Subject: </Text>
+        <Text bold backgroundColor={highlightSubject ? pal.selBg : undefined} color={pal.gold}>
           {truncate(clean(m.subject || "(no subject)"), Math.max(4, width - 11))}
         </Text>
       </Text>
-      <Text color={DIVIDER}>{rule}</Text>
+      <Text color={pal.divider}>{rule}</Text>
     </>
   );
 });
@@ -70,6 +72,7 @@ export const LetterView = memo(function LetterView({
   offset?: number;
   highlightSubject?: boolean;
 }) {
+  const pal = usePalette();
   const m = letter.meta;
   // Control chars (ESC etc.) in frontmatter are stripped so they can't inject
   // into the terminal.
@@ -88,7 +91,7 @@ export const LetterView = memo(function LetterView({
         {shown.map((ln, i) => (
           <Text key={i}>
             {ln.map((seg, j) => (
-              <Text key={j} color={PAPER} bold={seg.bold} italic={seg.italic} underline={seg.underline}>
+              <Text key={j} color={pal.paper} bold={seg.bold} italic={seg.italic} underline={seg.underline}>
                 {seg.text || " "}
               </Text>
             ))}
@@ -96,7 +99,7 @@ export const LetterView = memo(function LetterView({
         ))}
       </Box>
       {more && (
-        <Text color={FAINT}>
+        <Text color={pal.faint}>
           {"\u2026"} more
         </Text>
       )}

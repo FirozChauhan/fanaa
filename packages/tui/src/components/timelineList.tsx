@@ -1,7 +1,8 @@
 import React, { memo } from "react";
 import { Text } from "ink";
 import type { Letter } from "../data";
-import { ACCENT, FAINT, GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
+import { truncate } from "../util";
+import { usePalette } from "../theme";
 
 /**
  * The timeline sidebar (`t` mode): a folder-style Year → Month → entries
@@ -64,6 +65,7 @@ export const TimelineList = memo(function TimelineList({
   width: number;
   height: number;
 }) {
+  const pal = usePalette();
   const view = rows.slice(start, start + height);
   return (
     <>
@@ -71,7 +73,7 @@ export const TimelineList = memo(function TimelineList({
         const abs = start + k;
         if (row.kind === "year") {
           return (
-            <Text key={`y${abs}`} color={GOLD} bold>
+            <Text key={`y${abs}`} color={pal.gold} bold>
               {row.text}
             </Text>
           );
@@ -82,9 +84,9 @@ export const TimelineList = memo(function TimelineList({
           const conn = sib && sib.kind === "month" ? "├ " : "└ ";
           const mark = row.collapsed ? "▸ " : "▾ ";
           return (
-            <Text key={`m${abs}`} color={ACCENT} bold>
-              <Text color={FAINT}>{conn}</Text>
-              <Text color={FAINT}>{mark}</Text>
+            <Text key={`m${abs}`} color={pal.accent} bold>
+              <Text color={pal.faint}>{conn}</Text>
+              <Text color={pal.faint}>{mark}</Text>
               {MONTHS[n] ?? row.text}
             </Text>
           );
@@ -100,15 +102,15 @@ export const TimelineList = memo(function TimelineList({
         const subjW = Math.max(4, width - 1 - 4 - id.length - 2);
         const subject = cap(truncate(l.meta.subject || "(no subject)", subjW)).padEnd(subjW);
         return (
-          <Text key={l.key} backgroundColor={sel ? SEL_BG : undefined} wrap="truncate">
-            <Text color={FAINT}>
+          <Text key={l.key} backgroundColor={sel ? pal.selBg : undefined} wrap="truncate">
+            <Text color={pal.faint}>
               {guid}
               {conn}
             </Text>
-            <Text color={sel ? GOLD : MUTED} bold={sel}>
+            <Text color={sel ? pal.gold : pal.muted} bold={sel}>
               {id}
             </Text>
-            <Text color={sel ? GOLD : PAPER} bold={sel}>
+            <Text color={sel ? pal.gold : pal.paper} bold={sel}>
               : {subject}
             </Text>
           </Text>

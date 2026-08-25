@@ -1,7 +1,8 @@
 import React, { memo } from "react";
 import { Text } from "ink";
 import type { Letter } from "../data";
-import { GOLD, MUTED, PAPER, SEL_BG, truncate } from "../util";
+import { truncate } from "../util";
+import { usePalette } from "../theme";
 
 /**
  * The flat (non-timeline) sidebar: one row per letter — unique ID (HHMM+hash)
@@ -28,6 +29,7 @@ export const LetterList = memo(function LetterList({
   width: number;
   height: number;
 }) {
+  const pal = usePalette();
   const rows = letters.slice(0, height);
   return (
     <>
@@ -41,13 +43,13 @@ export const LetterList = memo(function LetterList({
         return (
           <Text
             key={l.key}
-            backgroundColor={sel ? SEL_BG : undefined}
+            backgroundColor={sel ? pal.selBg : undefined}
             wrap="truncate"
           >
-            <Text color={sel ? GOLD : MUTED} bold={sel}>
+            <Text color={sel ? pal.gold : pal.muted} bold={sel}>
               {id}
             </Text>
-            <Text color={sel ? GOLD : PAPER} bold={sel}>
+            <Text color={sel ? pal.gold : pal.paper} bold={sel}>
               : {subject}
             </Text>
           </Text>

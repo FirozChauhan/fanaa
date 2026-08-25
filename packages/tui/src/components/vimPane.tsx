@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import { Terminal, type IBufferCell, type IBufferLine } from "@xterm/headless";
-import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
+import { getPalette, usePalette, type ThemePalette } from "../theme";
 
 /**
  * The embedded editor: a real terminal program (vim by default) running in
@@ -185,7 +185,7 @@ function cellAnsi(cell: IBufferCell | undefined): string {
 }
 
 /** vim config: TUI theme + auto-save + app hotkeys, sourced after vimrc. */
-function vimrcContent(): string {
+function vimrcContent(pal: ThemePalette): string {
   // Absolute path to the bundled English wordbase (see assets/words.txt).
   // Read at runtime so the sourced vimrc always points at the real file,
   // whatever the cwd or package layout.
@@ -219,12 +219,12 @@ function vimrcContent(): string {
     "set laststatus=0",
     "set noshowmode",
     "set fillchars+=eob:\\ ",
-    `hi Normal guifg=${DEFAULT_FG}`,
-    `hi Visual guifg=${DEFAULT_BG} guibg=${ACCENT}`,
-    `hi Search guifg=${DEFAULT_BG} guibg=${AMBER}`,
-    `hi MatchParen guifg=${GOLD}`,
-    `hi Pmenu guifg=${PAPER} guibg=${SEL_BG}`,
-    `hi PmenuSel guifg=${DEFAULT_BG} guibg=${ACCENT}`,
+    `hi Normal guifg=${pal.paper}`,
+    `hi Visual guifg=${DEFAULT_BG} guibg=${pal.accent}`,
+    `hi Search guifg=${DEFAULT_BG} guibg=${pal.amber}`,
+    `hi MatchParen guifg=${pal.gold}`,
+    `hi Pmenu guifg=${pal.paper} guibg=${pal.selBg}`,
+    `hi PmenuSel guifg=${DEFAULT_BG} guibg=${pal.accent}`,
     '" auto-save: write after every change (also clears the modified flag so',
     '" a plain :q quits cleanly instead of E37) and once more on any exit.',
     "au TextChangedI,TextChanged * sil! write",
@@ -275,6 +275,10 @@ export function VimPane({
   const xtermRef = useRef<Terminal | null>(null);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
+  // Palette for the live overlay paint (runs outside React): kept in a ref
+  // and refreshed on every render so a theme cycle is picked up instantly.
+  const palRef = useRef(getPalette());
+  palRef.current = usePalette();
   const exitedRef = useRef(false);
   const [frame, setFrame] = useState(0);
   // What the overlay last wrote to the real terminal (per pane row, as SGR
@@ -319,7 +323,7 @@ export function VimPane({
     const ccell = buf.getLine(vy + cy)?.getCell(cx);
     const cbg = ccell ? colorOf(ccell, "bg") : undefined;
     out.push(`\x1b[${absY(cy)};${colOffset + cx}H`);
-    out.push(`\x1b[38;2;${hexRgb(ACCENT)}m${cbg ? `\x1b[48;2;${hexRgb(cbg)}m` : ""}\u258f\x1b[m`);
+    out.push(`\x1b[38;2;${hexRgb(palRef.current.accent)}m${cbg ? `\x1b[48;2;${hexRgb(cbg)}m` : ""}\u258f\x1b[m`);
     lastBarRef.current = { y: cy, x: cx };
     out.push(`\x1b[${rows};1H`);
     process.stdout.write(out.join(""));
@@ -359,7 +363,7 @@ export function VimPane({
     if (/vim(\.w32)?$/i.test(editor[0])) {
       const vimrc = join(dirname(file), ".fanaa-vimrc");
       try {
-        writeFileSync(vimrc, vimrcContent());
+        writeFileSync(vimrc, vimrcContent(getPalette()));
         args.push("-c", `source ${vimrc.replace(/\s/g, "\\ ")}`);
       } catch {
         // Temp dir unwritable? Fall back to a bare vim (still editable).

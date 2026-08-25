@@ -12,7 +12,7 @@ import {
   setName,
   verifyCode,
 } from "fanaa-sync";
-import { ACCENT, FAINT, GOLD, MUTED, PAPER } from "../util";
+import { usePalette } from "../theme";
 
 /**
  * The cloud-sync panel — sign in / sign out / sync now, all inside the TUI.
@@ -38,6 +38,7 @@ type NameCtx = "signup" | "edit";
  * (round accent border) so it reads as an overlay, not a page.
  */
 function PanelBox({ cols, rows, children }: { cols: number; rows: number; children: React.ReactNode }) {
+  const pal = usePalette();
   const w = Math.min(56, cols - 4);
   const h = Math.min(16, rows - 4);
   return (
@@ -46,7 +47,7 @@ function PanelBox({ cols, rows, children }: { cols: number; rows: number; childr
       height={h}
       flexDirection="column"
       borderStyle="round"
-      borderColor={ACCENT}
+      borderColor={pal.accent}
       paddingX={2}
       paddingTop={1}
     >
@@ -76,6 +77,7 @@ export function SyncPanel({
   /** Fired after any session-state change (login/logout/name) — header updates. */
   onStateChange?: () => void;
 }) {
+  const pal = usePalette();
   const [state, setState] = useState(() => loadSyncState(storeRoot));
   const [phase, setPhase] = useState<Phase>("idle");
   const [email, setEmail] = useState("");
@@ -256,11 +258,11 @@ export function SyncPanel({
   if (phase === "email") {
     return (
       <PanelBox cols={cols} rows={rows}>
-        <Text bold color={GOLD}>
+        <Text bold color={pal.gold}>
           SIGN IN
         </Text>
         <Box marginTop={1}>
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             {"\u276f"} {" "}
           </Text>
           <TextInput
@@ -277,7 +279,7 @@ export function SyncPanel({
             placeholder="you@example.com"
           />
         </Box>
-        <Text color={FAINT}>enter = request 6-digit code · esc = cancel</Text>
+        <Text color={pal.faint}>enter = request 6-digit code · esc = cancel</Text>
         {error && (
           <Text color="#e07a5f">
             {"\u2717"} {error}
@@ -290,12 +292,12 @@ export function SyncPanel({
   if (phase === "code") {
     return (
       <PanelBox cols={cols} rows={rows}>
-        <Text bold color={GOLD}>
+        <Text bold color={pal.gold}>
           SIGN IN
         </Text>
-        <Text color={MUTED}>{message}</Text>
+        <Text color={pal.muted}>{message}</Text>
         <Box marginTop={1}>
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             {"\u276f"} {" "}
           </Text>
           <TextInput
@@ -311,7 +313,7 @@ export function SyncPanel({
             placeholder="000000"
           />
         </Box>
-        <Text color={FAINT}>enter = verify · esc = cancel</Text>
+        <Text color={pal.faint}>enter = verify · esc = cancel</Text>
         {error && (
           <Text color="#e07a5f">
             {"\u2717"} {error}
@@ -324,14 +326,14 @@ export function SyncPanel({
   if (phase === "name") {
     return (
       <PanelBox cols={cols} rows={rows}>
-        <Text bold color={GOLD}>
+        <Text bold color={pal.gold}>
           YOUR NAME
         </Text>
-        <Text color={MUTED}>
+        <Text color={pal.muted}>
           {nameCtx === "signup" ? "what should the TUI header call you?" : "edit your full name"}
         </Text>
         <Box marginTop={1}>
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             {"\u276f"} {" "}
           </Text>
           <TextInput
@@ -341,7 +343,7 @@ export function SyncPanel({
             placeholder={nameCtx === "signup" ? "(skip — no name)" : "(clear)"}
           />
         </Box>
-        <Text color={FAINT}>
+        <Text color={pal.faint}>
           {nameCtx === "signup" ? "enter = save (optional) · esc = skip" : "enter = save · esc = cancel"}
         </Text>
         {error && (
@@ -356,13 +358,13 @@ export function SyncPanel({
   // ----- status + actions -----
   return (
     <PanelBox cols={cols} rows={rows}>
-      <Text bold color={GOLD}>
+      <Text bold color={pal.gold}>
         CLOUD SYNC
       </Text>
       <Box flexDirection="column" marginTop={1}>
         <Text>
-          <Text color={MUTED}>status </Text>
-          <Text color={signedIn ? ACCENT : PAPER}>
+          <Text color={pal.muted}>status </Text>
+          <Text color={signedIn ? pal.accent : pal.paper}>
             {signedIn
               ? state.name
                 ? `signed in as ${state.name} (${state.email})`
@@ -371,44 +373,44 @@ export function SyncPanel({
           </Text>
         </Text>
         <Text>
-          <Text color={MUTED}>api    </Text>
-          <Text color={PAPER}>{apiUrl}</Text>
+          <Text color={pal.muted}>api    </Text>
+          <Text color={pal.paper}>{apiUrl}</Text>
         </Text>
         <Text>
-          <Text color={MUTED}>journal</Text>
-          <Text color={PAPER}> {category}</Text>
-          {j?.cursor ? <Text color={FAINT}> · synced (cursor {j.cursor.slice(0, 10)}…)</Text> : null}
+          <Text color={pal.muted}>journal</Text>
+          <Text color={pal.paper}> {category}</Text>
+          {j?.cursor ? <Text color={pal.faint}> · synced (cursor {j.cursor.slice(0, 10)}…)</Text> : null}
         </Text>
       </Box>
       {(message || error) && (
         <Box marginTop={1}>
-          <Text color={error ? "#e07a5f" : ACCENT}>{error ? `\u2717 ${error}` : message}</Text>
+          <Text color={error ? "#e07a5f" : pal.accent}>{error ? `\u2717 ${error}` : message}</Text>
         </Box>
       )}
       <Box flexDirection="column" marginTop={1}>
         {signedIn ? (
           <>
             <Text>
-              <Text bold color={ACCENT}>p</Text>
-              <Text color={MUTED}>  sync now</Text>
+              <Text bold color={pal.accent}>p</Text>
+              <Text color={pal.muted}>  sync now</Text>
             </Text>
             <Text>
-              <Text bold color={ACCENT}>n</Text>
-              <Text color={MUTED}>  edit name</Text>
+              <Text bold color={pal.accent}>n</Text>
+              <Text color={pal.muted}>  edit name</Text>
             </Text>
             <Text>
-              <Text bold color={ACCENT}>o</Text>
-              <Text color={MUTED}>  sign out</Text>
+              <Text bold color={pal.accent}>o</Text>
+              <Text color={pal.muted}>  sign out</Text>
             </Text>
           </>
         ) : (
           <Text>
-            <Text bold color={ACCENT}>l</Text>
-            <Text color={MUTED}>  sign in</Text>
+            <Text bold color={pal.accent}>l</Text>
+            <Text color={pal.muted}>  sign in</Text>
           </Text>
         )}
         <Box marginTop={1}>
-          <Text color={FAINT}>esc / q — back to the journal</Text>
+          <Text color={pal.faint}>esc / q — back to the journal</Text>
         </Box>
       </Box>
     </PanelBox>

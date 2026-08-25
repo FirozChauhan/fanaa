@@ -1,21 +1,9 @@
 /**
- * Shared color palette, text helpers, and the markdown→styled-segments
- * pipeline for the TUI.
+ * Text helpers and the markdown→styled-segments pipeline for the TUI.
  *
- * The palette is a warm paper-and-ink scheme; every component imports these
- * constants rather than hardcoding hex values. Text helpers are terminal-
- * agnostic (no ANSI escapes — Ink renders the styles).
+ * Colors live in theme.tsx (a set of named palettes consumed via
+ * usePalette()); this module only holds terminal-agnostic helpers.
  */
-
-// Warm paper-and-ink palette for the TUI.
-export const ACCENT = "#ffa94d"; // ember orange — the beloved
-export const GOLD = "#ffd88a"; // bright gold — today, selection, subjects
-export const AMBER = "#c98a3d"; // title gradient start
-export const PAPER = "#cfc7b8"; // body text — warm parchment
-export const MUTED = "#8a8175"; // secondary text
-export const FAINT = "#5c564d"; // tertiary text, hints
-export const DIVIDER = "#3a362f"; // separators
-export const SEL_BG = "#3a3124"; // selected row background (warm umber)
 
 function hexToRgb(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);

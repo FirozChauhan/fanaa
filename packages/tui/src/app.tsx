@@ -12,7 +12,8 @@ import { TimelineList, type TreeRow } from "./components/timelineList";
 import { LetterView, LetterHeader } from "./components/letterView";
 import { SyncPanel } from "./components/syncPanel";
 import { VimPane } from "./components/vimPane";
-import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
+import { gradientColors, wrapBodyCached } from "./util";
+import { cycleTheme, getTheme, initTheme, THEME_NAMES, THEMES, usePalette, type ThemeName } from "./theme";
 
 // The wrapper passes the active journal category; entries live in its repo.
 
@@ -36,6 +37,9 @@ import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrap
 const CATEGORY = process.env.FANAA_CATEGORY?.trim() || "fanaa";
 const STORE = fanaaRoot();
 const JOURNAL = journalRoot(STORE, CATEGORY);
+
+// Adopt the persisted theme (from <store>/settings.json) before first render.
+initTheme(STORE);
 
 type View = "browse" | "letter" | "compose" | "help" | "sync";
 
@@ -89,11 +93,13 @@ function buildTree(lst: Letter[], col: Set<string>) {
 const titleGradCache = new Map<string, string[]>();
 function Title() {
   // Show the journal category next to the logo when it's not the default.
+  const pal = usePalette();
   const title = CATEGORY === "fanaa" ? TITLE : `${TITLE} \u00b7 ${CATEGORY}`;
-  let colors = titleGradCache.get(title);
+  const key = `${getTheme()}:${title}`;
+  let colors = titleGradCache.get(key);
   if (!colors) {
-    colors = gradientColors(title, AMBER, GOLD);
-    titleGradCache.set(title, colors);
+    colors = gradientColors(title, pal.amber, pal.gold);
+    titleGradCache.set(key, colors);
   }
   return (
     <Text bold>
@@ -132,12 +138,14 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
     const t = setTimeout(onDone, SPLASH_MS);
     return () => clearTimeout(t);
   }, [onDone]);
-  // Logo is static — parse + gradient once per mount.
+  // Logo is static — parse + gradient once per mount (per theme).
+  const pal = usePalette();
   const { lines, colors } = useMemo(() => {
     const lines = SPLASH_LOGO.split("\n");
-    const colors = gradientColors(SPLASH_LOGO.replace(/\n/g, ""), AMBER, GOLD);
+    const colors = gradientColors(SPLASH_LOGO.replace(/\n/g, ""), pal.amber, pal.gold);
     return { lines, colors };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pal]);
   let ci = 0;
   return (
     <Box
@@ -162,10 +170,10 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
         ))}
       </Box>
       <Box marginTop={1}>
-        <Text color={FAINT}>letters only you will ever read</Text>
+        <Text color={pal.faint}>letters only you will ever read</Text>
       </Box>
       <Box marginTop={1}>
-        <Text color={DIVIDER}>{VERSION}</Text>
+        <Text color={pal.divider}>{VERSION}</Text>
       </Box>
     </Box>
   );
@@ -175,15 +183,16 @@ function Splash({ rows, onDone }: { rows: number; onDone: () => void }) {
 type HelpSection = { title: string; items: [string, string][] };
 
 function HelpSectionBox({ s }: { s: HelpSection }) {
+  const pal = usePalette();
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text bold color={GOLD}>
+      <Text bold color={pal.gold}>
         {s.title}
       </Text>
       {s.items.map(([k, d]) => (
         <Text key={`${k}-${d}`}>
-          <Text color={MUTED}>{k.padEnd(12)}</Text>
-          <Text color={PAPER}>{d}</Text>
+          <Text color={pal.muted}>{k.padEnd(12)}</Text>
+          <Text color={pal.paper}>{d}</Text>
         </Text>
       ))}
     </Box>
@@ -229,6 +238,10 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
       ],
     },
     {
+      title: "LOOK",
+      items: [["T", "cycle theme"]],
+    },
+    {
       title: "CLOUD",
       items: [
         ["p", "sync (login/logout)"],
@@ -237,16 +250,17 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
       ],
     },
   ];
+  const pal = usePalette();
   return (
     <Box
       width={w}
       flexDirection="column"
       borderStyle="round"
-      borderColor={ACCENT}
+      borderColor={pal.accent}
       paddingX={2}
       paddingTop={1}
     >
-      <Text bold color={GOLD}>
+      <Text bold color={pal.gold}>
         HELP
       </Text>
       <Box flexDirection="row" gap={4}>
@@ -262,7 +276,7 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
         </Box>
       </Box>
       <Box marginTop={1}>
-        <Text color={FAINT}>esc / h — close</Text>
+        <Text color={pal.faint}>esc / h — close</Text>
       </Box>
     </Box>
   );
@@ -278,6 +292,7 @@ function HelpOverlay({ cols, onClose }: { cols: number; onClose: () => void }) {
  * otherwise React throws "Rendered fewer hooks than expected".
  */
 export function App() {
+  const pal = usePalette();
   const { stdout } = useStdout();
   const [letters, setLetters] = useState<Letter[]>(() => loadLetters(JOURNAL));
   const [idx, setIdx] = useState(0);
@@ -636,6 +651,19 @@ export function App() {
     } else if (input === "q" || (key.ctrl && input === "c")) process.exit(0);
   });
 
+  // Theme cycle: T (uppercase, distinct from lowercase t = timeline toggle).
+  // Gated so it never fires while a TextInput owns the keys (searching or the
+  // compose subject box) or while vim owns the pane (edit/sync).
+  useInput((input, key) => {
+    if (key.ctrl) return;
+    if (splash || edit || view === "compose" || view === "sync") return;
+    if (searching) return;
+    if (input === "T") {
+      const next = cycleTheme();
+      setFlash(`theme \u2192 ${THEME_NAMES[next]}`);
+    }
+  });
+
   // Layout numbers are view-independent (the empty/help/compose returns below
   // must NOT skip them — hooks must run on every render or React throws
   // "Rendered fewer hooks than expected").
@@ -722,9 +750,9 @@ export function App() {
     return (
       <Box flexDirection="column" height={rows - 1} paddingX={2} paddingTop={3}>
         <Title />
-        <Text color={MUTED}>a new letter — subject first, then vim</Text>
+        <Text color={pal.muted}>a new letter — subject first, then vim</Text>
         <Box marginTop={1}>
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             {"\u276f"} {" "}
           </Text>
           <TextInput
@@ -734,7 +762,7 @@ export function App() {
             placeholder="(no subject)"
           />
         </Box>
-        <Text color={FAINT}>enter = vim · esc = cancel</Text>
+        <Text color={pal.faint}>enter = vim · esc = cancel</Text>
       </Box>
     );
   }
@@ -775,13 +803,13 @@ export function App() {
           <Title />
         </Box>
         <Box marginTop={1}>
-          <Text color={MUTED}>no letters yet</Text>
+          <Text color={pal.muted}>no letters yet</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color={FAINT}>press a to write your first one</Text>
+          <Text color={pal.faint}>press a to write your first one</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color={FAINT}>press p to sync from the cloud</Text>
+          <Text color={pal.faint}>press p to sync from the cloud</Text>
         </Box>
       </Box>
     );
@@ -806,17 +834,17 @@ export function App() {
         <Title />
         <Box flexGrow={1} />
         {syncName && (
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             {syncName}
           </Text>
         )}
       </Box>
-      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
+      <Text color={pal.divider}>{"\u2500".repeat(Math.max(4, cols))}</Text>
 
       {/* search bar (browse only; hidden while editing so vim keeps its pane) */}
       {searching && view === "browse" && !editing && (
         <Box paddingX={1} height={1}>
-          <Text bold color={ACCENT}>
+          <Text bold color={pal.accent}>
             /
           </Text>
           <TextInput
@@ -828,7 +856,7 @@ export function App() {
             onSubmit={() => setSearching(false)}
             placeholder="search subject or body"
           />
-          <Text color={FAINT}> ({filtered.length})</Text>
+          <Text color={pal.faint}> ({filtered.length})</Text>
         </Box>
       )}
 
@@ -837,10 +865,10 @@ export function App() {
         {!full && (
           <Box flexDirection="column" width={listW} paddingLeft={1}>
             {filtered.length === 0 ? (
-              <Text color={AMBER}>no matches for "{query}"</Text>
+              <Text color={pal.amber}>no matches for "{query}"</Text>
             ) : (
               <>
-                {hasAbove && <Text color={FAINT}>{" \u2191"}</Text>}
+                {hasAbove && <Text color={pal.faint}>{" \u2191"}</Text>}
                 {tree ? (
                   <TimelineList
                     rows={tree.rows}
@@ -857,7 +885,7 @@ export function App() {
                     height={listH - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0)}
                   />
                 )}
-                {hasBelow && <Text color={FAINT}>{" \u2193"}</Text>}
+                {hasBelow && <Text color={pal.faint}>{" \u2193"}</Text>}
               </>
             )}
           </Box>
@@ -865,7 +893,7 @@ export function App() {
         {!full && showPreview && (editing || effectiveSelected) && (
           <Box flexDirection="column" width={1}>
             {Array.from({ length: dividerLines }).map((_, i) => (
-              <Text key={i} color={DIVIDER}>
+              <Text key={i} color={pal.divider}>
                 {"\u2502"}
               </Text>
             ))}
@@ -917,25 +945,27 @@ export function App() {
           view (including while vim is open) so the footer is persistent.
           The frame is height={rows}, and the divider+footer occupy the last
           two rows; the sidebar/preview panes flexGrow to fill the rest. */}
-      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
+      <Text color={pal.divider}>{"\u2500".repeat(Math.max(4, cols))}</Text>
       <Box paddingX={1}>
-        <Text color={MUTED}>{VERSION}</Text>
-        <Text color={FAINT}> · </Text>
-        <Text color={FAINT}>
-          <Text color={MUTED}>P</Text>: sync
+        <Text color={pal.muted}>{VERSION}</Text>
+        <Text color={pal.faint}> · </Text>
+        <Text color={pal.faint}>
+          <Text color={pal.muted}>P</Text>: sync
         </Text>
+        <Text color={pal.faint}> · </Text>
+        <Text color={pal.accent}>{THEME_NAMES[getTheme()]}</Text>
         {q && !searching && view === "browse" && (
           <>
-            <Text color={FAINT}> · </Text>
-            <Text color={AMBER}>
+            <Text color={pal.faint}> · </Text>
+            <Text color={pal.amber}>
               /{q}/ ({filtered.length})
             </Text>
           </>
         )}
         {flash && (
           <>
-            <Text color={FAINT}> · </Text>
-            <Text color={AMBER}>{flash}</Text>
+            <Text color={pal.faint}> · </Text>
+            <Text color={pal.amber}>{flash}</Text>
           </>
         )}
       </Box>
