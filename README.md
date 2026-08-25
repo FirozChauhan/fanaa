@@ -105,7 +105,7 @@ last-write-wins on timestamps, and deletes replicate as tombstones (a
 letter deleted on one device disappears everywhere). The session token and
 sync state live in `~/.fanaa/state/` (0600, git-guarded). Set
 `FANAA_API_URL` to point the CLI at a specific server (default
-`http://localhost:8787`).
+`https://fanaa-api.jigar1155.workers.dev`).
 
 **In the TUI**, the same flow lives in one key: press `p` from anywhere
 to open the cloud panel — sign in (email → code from your inbox), sync

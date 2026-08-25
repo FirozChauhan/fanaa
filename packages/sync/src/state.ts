@@ -42,13 +42,13 @@ export interface SyncState {
 }
 
 const DEFAULTS = {
-  apiUrl: "http://localhost:8787",
+  apiUrl: "https://fanaa-api.jigar1155.workers.dev",
   email: "",
   name: "",
   token: "",
 } as const;
 
-/** The API base URL: FANAA_API_URL env wins, else the stored one, else localhost. */
+/** The API base URL: FANAA_API_URL env wins, else the stored one, else the hosted default. */
 export function resolveApiUrl(state: Pick<SyncState, "apiUrl">): string {
   return process.env.FANAA_API_URL || state.apiUrl || DEFAULTS.apiUrl;
 }
