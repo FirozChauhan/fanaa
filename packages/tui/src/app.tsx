@@ -404,6 +404,7 @@ export function App() {
     setEdit(null);
     editBusyRef.current = false;
     setTimeout(() => {
+      let savedKey: string | null = null;
       try {
         if (s?.mode === "compose") {
           const cleaned = body.replace(/\n+$/, "");
@@ -411,6 +412,7 @@ export function App() {
             setFlash("aborted \u2014 empty letter");
           } else {
             const res = writeLetter({ root: JOURNAL, dateKey: dayKey(new Date()), subject: s.subject, body: cleaned });
+            savedKey = res.key;
             setFlash(`saved ${res.key} as ${res.from} \u2192 ${res.to}`);
           }
         } else if (s?.mode === "edit") {
@@ -418,12 +420,29 @@ export function App() {
           if (res.status === "saved") setFlash(`edited ${s.key}`);
           else if (res.status === "unchanged") setFlash("no changes \u2014 nothing saved");
           else setFlash("aborted \u2014 empty letter");
+          savedKey = s.key;
         }
       } catch (err) {
         setFlash(`save failed: ${err instanceof Error ? err.message : err}`);
       }
-      setLetters(loadLetters(JOURNAL));
-      setIdx(0);
+      const ls = loadLetters(JOURNAL);
+      setLetters(ls);
+      // Stay on the letter we just edited (or wrote) instead of snapping
+      // back to the top; fall back to 0 if it isn't in the current view
+      // (e.g. filtered out by an active search). An aborted compose leaves
+      // the selection untouched.
+      if (savedKey) {
+        if (timeline) {
+          const tr = buildTree(sortLetters(ls, "date"), collapsed);
+          const row = tr.rows.findIndex((r) => r.kind === "letter" && r.letter.key === savedKey);
+          setTIdx(row >= 0 ? row : 0);
+        } else {
+          const ordered = sortLetters(ls, sortMode);
+          const hay = q ? ordered.filter((l) => (l.meta.subject + "\n" + l.body).toLowerCase().includes(q)) : ordered;
+          const i = hay.findIndex((l) => l.key === savedKey);
+          setIdx(i >= 0 ? i : 0);
+        }
+      }
     }, 0);
   };
 
@@ -437,7 +456,8 @@ export function App() {
       setFlash(`delete failed: ${err instanceof Error ? err.message : err}`);
     }
     setLetters(loadLetters(JOURNAL));
-    setIdx(0);
+    // Keep the current selection position — fIdx clamps it if the list
+    // shrank, so the next letter naturally takes the deleted one's spot.
   };
 
   useInput((input, key) => {
@@ -762,8 +782,14 @@ export function App() {
   // Number of lines the divider column should span.
   const dividerLines = (hasAbove ? 1 : 0) + listH + (hasBelow ? 1 : 0);
 
+  // While vim is open the pane frame must stay one row shorter than the
+  // terminal (rows - 1): with the footer divider hidden the app's natural
+  // height is exactly rows, which makes Ink take the clearTerminal (2J)
+  // path on every keystroke frame — the full-screen flash/lag. Shrinking
+  // the root by one row drops the frame below the threshold so Ink redraws
+  // incrementally (eraseLines) instead.
   return (
-    <Box flexDirection="column" height={rows}>
+    <Box flexDirection="column" height={editing ? rows - 1 : rows}>
       {/* header */}
       <Box paddingX={1} alignItems="center">
         <Title />
@@ -867,8 +893,11 @@ export function App() {
         )}
       </Box>
 
-      {/* footer */}
-      <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>
+      {/* footer — the divider is hidden while vim is open so the frame
+          stays one row shorter than the terminal; Ink then redraws
+          incrementally (eraseLines) instead of 2J-clearing the whole
+          screen on every keystroke, which flashes/lags on real terminals */}
+      {!editing && <Text color={DIVIDER}>{"\u2500".repeat(Math.max(4, cols))}</Text>}
       <Box paddingX={1}>
         {editing ? (
           <Text color={FAINT}>
