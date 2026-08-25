@@ -15,7 +15,7 @@ import { ACCENT, AMBER, GOLD, PAPER, SEL_BG } from "../util";
  * App's useInput handler is gated off while editing, so vim alone sees the
  * keys — including ctrl+c, which vim handles itself).
  *
- * Cursor: rendered in-frame as a thin underline under the emulated cursor
+ * Cursor: rendered in-frame as a thin vertical bar at the emulated cursor
  * position — exactly how a real terminal emulator draws its own cursor. No
  * ANSI cursor escapes are ever written to stdout, so Ink's incremental
  * frame erasing (which assumes the real cursor never moves) stays intact.
@@ -73,7 +73,7 @@ type Style = {
 /**
  * Turn one emulated buffer line into styled Ink spans (cells grouped by
  * style). cursorX (a buffer column) marks the editor's cursor cell, which is
- * drawn as a thin underline — the terminal-emulator cursor.
+ * drawn as a thin vertical bar — the terminal-emulator cursor.
  */
 function renderLine(line: IBufferLine | undefined, width: number, cursorX?: number): React.ReactNode {
   if (!line) return " ".repeat(width);
@@ -110,18 +110,20 @@ function renderLine(line: IBufferLine | undefined, width: number, cursorX?: numb
       fg = newFg;
       bg = newBg;
     }
-    // Thin cursor: a slim underline under the insertion point (block cursor
-    // replaced by this in the previous change) — paints no background, so the
-    // editor blends with the app chrome instead of showing a dark rectangle.
+    // Vertical bar cursor: a thin "▏" rendered at the cursor cell (the
+    // emulator's cursor). Insert mode is forced, so it usually sits on the
+    // empty cell after the text — a slim bar like vim's insert cursor.
     const cursorHere = x === cursorX;
-    const style: Style = {
-      text: cell.getChars() || " ",
-      fg,
-      bg,
-      bold: cell.isBold() === 1,
-      dim: cell.isDim() === 1,
-      underline: cell.isUnderline() === 1 || cursorHere,
-    };
+    const style: Style = cursorHere
+      ? { text: "\u258f", fg: ACCENT, bg, bold: false, dim: false, underline: false }
+      : {
+          text: cell.getChars() || " ",
+          fg,
+          bg,
+          bold: cell.isBold() === 1,
+          dim: cell.isDim() === 1,
+          underline: cell.isUnderline() === 1,
+        };
     if (
       !cur ||
       cur.fg !== style.fg ||
@@ -164,9 +166,13 @@ function vimrcContent(): string {
     '" a plain :q quits cleanly instead of E37) and once more on any exit.',
     "au TextChangedI,TextChanged * sil! write",
     "au VimLeavePre * sil! write",
-    '" app hotkey: ctrl+q = close (writes if modified). Saving is automatic:',
+    '" modeless editor: insert mode is the only mode. ESC / ctrl+c can\'t leave',
+    '" it, so a stray keypress can never turn into normal-mode commands.',
+    "inoremap <Esc> <Nop>",
+    "inoremap <C-c> <Nop>",
+    '" app hotkey: ctrl+q = close (saves + exits). Saving is automatic:',
     '" every keystroke writes via TextChangedI and exit writes via VimLeavePre.',
-    "inoremap <C-q> <Esc>:x<CR>",
+    "inoremap <C-q> <C-o>:x<CR>",
     "nnoremap <C-q> :x<CR>",
   ].join("\n") + "\n";
 }

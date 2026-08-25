@@ -844,7 +844,7 @@ export function App() {
       <Box paddingX={1}>
         {editing ? (
           <Text color={FAINT}>
-            vim · <Text color={MUTED}>insert mode</Text> · <Text color={MUTED}>ctrl+q</Text> close · <Text color={MUTED}>ctrl+c</Text> interrupt
+            vim · <Text color={MUTED}>insert mode</Text> · <Text color={MUTED}>ctrl+q</Text> close
           </Text>
         ) : (
           <>
