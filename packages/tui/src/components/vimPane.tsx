@@ -61,31 +61,33 @@ function colorOf(cell: IBufferCell, which: "fg" | "bg"): string | undefined {
   return `#${rgb.toString(16).padStart(6, "0")}`;
 }
 
-type Style = {
+type Span = {
   text: string;
   fg?: string;
   bg?: string;
-  bold?: boolean;
-  dim?: boolean;
-  underline?: boolean;
+  bold: boolean;
+  dim: boolean;
+  underline: boolean;
 };
 
+/** "#rrggbb" → "r;g;b" for 24-bit SGR sequences. */
+function hexRgb(hex: string): string {
+  return `${parseInt(hex.slice(1, 3), 16)};${parseInt(hex.slice(3, 5), 16)};${parseInt(hex.slice(5, 7), 16)}`;
+}
+
 /**
- * Turn one emulated buffer line into styled Ink spans (cells grouped by
- * style). cursorX (a buffer column) marks the editor's cursor cell, which is
- * drawn as a thin vertical bar — the terminal-emulator cursor.
+ * Decompose one emulated buffer line into style-compressed runs (cells with
+ * the same fg/bg/weight grouped). No cursor bar here: the live cursor is
+ * painted separately on top (see VimPane's overlay), so the row content is
+ * always the true buffer.
  */
-function renderLine(line: IBufferLine | undefined, width: number, cursorX?: number): React.ReactNode {
-  if (!line) return " ".repeat(width);
-  const spans: React.ReactNode[] = [];
-  let cur: Style | null = null;
+function rowSpans(line: IBufferLine | undefined, width: number): Span[] {
+  if (!line) return [{ text: " ".repeat(width), bold: false, dim: false, underline: false }];
+  const spans: Span[] = [];
+  let cur: Span | null = null;
   const flush = () => {
     if (cur) {
-      spans.push(
-        <Text key={spans.length} color={cur.fg} backgroundColor={cur.bg} bold={cur.bold} dimColor={cur.dim} underline={cur.underline}>
-          {cur.text}
-        </Text>
-      );
+      spans.push(cur);
       cur = null;
     }
   };
@@ -94,7 +96,7 @@ function renderLine(line: IBufferLine | undefined, width: number, cursorX?: numb
     if (!cell) {
       if (!cur || cur.fg !== undefined || cur.bg !== undefined || cur.bold || cur.dim || cur.underline) {
         flush();
-        cur = { text: "" };
+        cur = { text: "", bold: false, dim: false, underline: false };
       }
       cur.text += " ";
       continue;
@@ -110,20 +112,14 @@ function renderLine(line: IBufferLine | undefined, width: number, cursorX?: numb
       fg = newFg;
       bg = newBg;
     }
-    // Vertical bar cursor: a thin "▏" rendered at the cursor cell (the
-    // emulator's cursor). Insert mode is forced, so it usually sits on the
-    // empty cell after the text — a slim bar like vim's insert cursor.
-    const cursorHere = x === cursorX;
-    const style: Style = cursorHere
-      ? { text: "\u258f", fg: ACCENT, bg, bold: false, dim: false, underline: false }
-      : {
-          text: cell.getChars() || " ",
-          fg,
-          bg,
-          bold: cell.isBold() === 1,
-          dim: cell.isDim() === 1,
-          underline: cell.isUnderline() === 1,
-        };
+    const style: Span = {
+      text: cell.getChars() || " ",
+      fg,
+      bg,
+      bold: cell.isBold() === 1,
+      dim: cell.isDim() === 1,
+      underline: cell.isUnderline() === 1,
+    };
     if (
       !cur ||
       cur.fg !== style.fg ||
@@ -140,6 +136,51 @@ function renderLine(line: IBufferLine | undefined, width: number, cursorX?: numb
   }
   flush();
   return spans;
+}
+
+/** Spans → Ink <Text> nodes (the static pane content inside the app frame). */
+function rowToInk(spans: Span[]): React.ReactNode {
+  return spans.map((s, i) => (
+    <Text key={i} color={s.fg} backgroundColor={s.bg} bold={s.bold} dimColor={s.dim} underline={s.underline}>
+      {s.text}
+    </Text>
+  ));
+}
+
+/** Spans → 24-bit SGR escape string (the direct-overlay row writes). */
+function rowToAnsi(spans: Span[]): string {
+  let out = "";
+  for (const s of spans) {
+    if (!s.text) continue;
+    const codes: string[] = [];
+    if (s.bold) codes.push("1");
+    if (s.dim) codes.push("2");
+    if (s.underline) codes.push("4");
+    if (s.fg) codes.push(`38;2;${hexRgb(s.fg)}`);
+    if (s.bg) codes.push(`48;2;${hexRgb(s.bg)}`);
+    out += `\x1b[${codes.join(";")}m${s.text}\x1b[m`;
+  }
+  return out;
+}
+
+/** One emulated cell → its SGR-escaped text (restoring a bar-covered cell). */
+function cellAnsi(cell: IBufferCell | undefined): string {
+  if (!cell) return " ";
+  let fg = colorOf(cell, "fg");
+  let bg = colorOf(cell, "bg");
+  if (cell.isInverse() === 1) {
+    const newFg = bg ?? DEFAULT_BG;
+    const newBg = fg ?? DEFAULT_FG;
+    fg = newFg;
+    bg = newBg;
+  }
+  const codes: string[] = [];
+  if (cell.isBold() === 1) codes.push("1");
+  if (cell.isDim() === 1) codes.push("2");
+  if (cell.isUnderline() === 1) codes.push("4");
+  if (fg) codes.push(`38;2;${hexRgb(fg)}`);
+  if (bg) codes.push(`48;2;${hexRgb(bg)}`);
+  return `\x1b[${codes.join(";")}m${cell.getChars() || " "}\x1b[m`;
 }
 
 /** vim config: TUI theme + auto-save + app hotkeys, sourced after vimrc. */
@@ -187,6 +228,9 @@ export function VimPane({
   file,
   start,
   onExit,
+  rowOffset,
+  colOffset,
+  rows,
 }: {
   width: number;
   height: number;
@@ -200,6 +244,12 @@ export function VimPane({
   start?: "insert" | "append";
   /** Called once after the editor exits, with the file's final contents. */
   onExit: (body: string) => void;
+  /** The pane's first output line (1-based) in the terminal's row space. */
+  rowOffset: number;
+  /** The pane's first output column (1-based) in the terminal's column space. */
+  colOffset: number;
+  /** Terminal height in rows; the app's output ends at this row while editing. */
+  rows: number;
 }) {
   const termRef = useRef<Bun.Terminal | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -207,6 +257,53 @@ export function VimPane({
   onExitRef.current = onExit;
   const exitedRef = useRef(false);
   const [frame, setFrame] = useState(0);
+  // What the overlay last wrote to the real terminal (per pane row, as SGR
+  // strings) and where the cursor bar currently sits — the diff state for
+  // the direct paints. Kept in refs so paints never trigger React renders.
+  const lastDrawnRef = useRef<string[]>([]);
+  const lastBarRef = useRef<{ y: number; x: number } | null>(null);
+
+  /**
+   * Direct overlay paint: write only the pane rows that changed since the
+   * last paint, restore any cell the cursor bar uncovered, draw the bar at
+   * the emulator's cursor, then park the terminal cursor back at the app's
+   * bottom line (where Ink's incremental frames expect it). Runs
+   * synchronously after every PTY chunk is parsed, so typing latency is a
+   * terminal's natural ~1-2ms instead of a full 30-line Ink repaint.
+   */
+  const paint = () => {
+    const x = xtermRef.current;
+    if (!x) return;
+    const buf = x.buffer.active;
+    const vy = buf.viewportY;
+    const n = Math.min(height, buf.length - vy);
+    const rowsNow: string[] = [];
+    const changed: number[] = [];
+    for (let y = 0; y < n; y++) {
+      const s = rowToAnsi(rowSpans(buf.getLine(vy + y), width));
+      rowsNow.push(s);
+      if (s !== lastDrawnRef.current[y]) changed.push(y);
+    }
+    lastDrawnRef.current = rowsNow;
+    const out: string[] = [];
+    const absY = (y: number) => rowOffset + y;
+    for (const y of changed) {
+      out.push(`\x1b[${absY(y)};${colOffset}H`, rowsNow[y]);
+    }
+    const cy = buf.cursorY;
+    const cx = buf.cursorX;
+    const lb = lastBarRef.current;
+    if (lb && (lb.y !== cy || lb.x !== cx) && !changed.includes(lb.y)) {
+      out.push(`\x1b[${absY(lb.y)};${colOffset + lb.x}H`, cellAnsi(buf.getLine(vy + lb.y)?.getCell(lb.x)));
+    }
+    const ccell = buf.getLine(vy + cy)?.getCell(cx);
+    const cbg = ccell ? colorOf(ccell, "bg") : undefined;
+    out.push(`\x1b[${absY(cy)};${colOffset + cx}H`);
+    out.push(`\x1b[38;2;${hexRgb(ACCENT)}m${cbg ? `\x1b[48;2;${hexRgb(cbg)}m` : ""}\u258f\x1b[m`);
+    lastBarRef.current = { y: cy, x: cx };
+    out.push(`\x1b[${rows};1H`);
+    process.stdout.write(out.join(""));
+  };
 
   // Spawn the editor in a PTY once; keep a reference to the running process
   // so the resize effect can adjust both the PTY and the emulator.
@@ -216,36 +313,16 @@ export function VimPane({
     const xterm = new Terminal({ cols: width, rows: height, allowProposedApi: true, convertEol: true });
     xtermRef.current = xterm;
 
-    // Render when vim's redraw burst settles. Vim emits each redraw as a few
-    // chunks (content, then the final cursor move — the latter trails by
-    // ~16ms while the TextChangedI auto-save runs file I/O). Rendering
-    // mid-burst showed the block cursor at a transient position for a frame
-    // (the per-keystroke cursor jump). The timer trails the LAST chunk by the
-    // quiet period, measured from when the burst started (firstPending), and
-    // a cap bounds the wait during continuous/held-key input so frames keep
-    // flowing. xterm's write() applies chunks asynchronously, so bumps happen
-    // in the write callback, after each chunk is in the buffer.
-    const QUIET = 50;
-    const CAP = 60;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let firstPending = 0;
-    const bump = () => {
-      if (timer) clearTimeout(timer);
-      if (!firstPending) firstPending = Date.now();
-      const elapsed = Date.now() - firstPending;
-      const wait = Math.max(8, Math.min(QUIET, CAP - elapsed));
-      timer = setTimeout(() => {
-        timer = null;
-        firstPending = 0;
-        setFrame((f) => f + 1);
-      }, wait);
-    };
-
     const term = new Bun.Terminal({
       cols: width,
       rows: height,
       data: (_t, d) => {
-        xterm.write(d, bump);
+        // After each chunk is parsed into the emulator buffer, paint the
+        // changed pane rows straight to the terminal. No debounce: vim's
+        // per-keystroke output is a content chunk plus a cursor chunk a few
+        // ms later — both are tiny diffs, so the screen follows the buffer
+        // at a real terminal's speed.
+        xterm.write(d, paint);
       },
     });
     termRef.current = term;
@@ -303,7 +380,6 @@ export function VimPane({
     process.stdin.on("data", onData);
 
     return () => {
-      if (timer) clearTimeout(timer);
       process.stdin.off("data", onData);
       term.close();
       xterm.dispose();
@@ -316,23 +392,37 @@ export function VimPane({
   useEffect(() => {
     termRef.current?.resize(width, height);
     xtermRef.current?.resize(width, height);
+    lastDrawnRef.current = [];
+    lastBarRef.current = null;
     setFrame((f) => f + 1);
   }, [width, height]);
 
-  // Emulated screen → Ink rows. The viewport starts at buffer line
-  // viewportY, so add it to index the absolute buffer correctly. The block
-  // cursor rides inside the frame at the emulated cursor position.
-  const rows = useMemo(() => {
+  // Any app frame (resize, app state) repaints the whole pane from the
+  // static snapshot, clobbering the live overlay — re-paint everything just
+  // after Ink's throttled write lands. During typing no app frame fires, so
+  // this stays quiet and the per-chunk paints are the only output.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      lastDrawnRef.current = [];
+      lastBarRef.current = null;
+      paint();
+    }, 40);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+
+  // Static emulated screen → Ink rows (what the app frame paints; the live
+  // cursor rides on top via the overlay paints). The viewport starts at
+  // buffer line viewportY, so add it to index the absolute buffer correctly.
+  const inkRows = useMemo(() => {
     const x = xtermRef.current;
     if (!x) return null;
     const buf = x.buffer.active;
     const vy = buf.viewportY;
-    const cx = buf.cursorX;
-    const cy = buf.cursorY;
     const n = Math.min(height, buf.length - vy);
     const out: React.ReactNode[] = [];
     for (let y = 0; y < n; y++) {
-      out.push(<Text key={y}>{renderLine(buf.getLine(vy + y), width, y === cy ? cx : undefined)}</Text>);
+      out.push(<Text key={y}>{rowToInk(rowSpans(buf.getLine(vy + y), width))}</Text>);
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -340,7 +430,7 @@ export function VimPane({
 
   return (
     <Box flexDirection="column" width={width} height={height} overflowY="hidden">
-      {rows ?? (
+      {inkRows ?? (
         <Text>
           {" ".repeat(Math.max(1, width))}
         </Text>

@@ -878,6 +878,13 @@ export function App() {
                   file={editFileRef.current}
                   start={edit.mode === "compose" ? "insert" : "append"}
                   onExit={finishEdit}
+                  // title(1) + divider(1) + the preview column's letterhead(5)
+                  // sit above the pane → it starts at the 8th output line; the
+                  // sidebar(listW) + divider column(1) + margin(1) sit to its
+                  // left → it starts at column listW+2 (1-based).
+                  rowOffset={8}
+                  colOffset={listW + 2}
+                  rows={rows}
                 />
               </>
             ) : effectiveSelected ? (
