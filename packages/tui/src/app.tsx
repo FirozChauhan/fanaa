@@ -4,12 +4,12 @@ import { join } from "node:path";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
-import { dayKey, editLetter, entryPath, fanaaRoot, journalRoot, parseEntry, removeLetter, writeLetter } from "fanaa-core";
+import { dayKey, editLetter, entryPath, fanaaRoot, gitEmail, journalRoot, loadConfig, parseEntry, removeLetter, writeLetter } from "fanaa-core";
 import { loadSyncState, recordDelete } from "fanaa-sync";
 import { loadLetters, sortLetters, type Letter, type SortMode } from "./data";
 import { LetterList } from "./components/letterList";
 import { TimelineList, type TreeRow } from "./components/timelineList";
-import { LetterView } from "./components/letterView";
+import { LetterView, LetterHeader } from "./components/letterView";
 import { SyncPanel } from "./components/syncPanel";
 import { VimPane } from "./components/vimPane";
 import { AMBER, DIVIDER, FAINT, GOLD, MUTED, PAPER, ACCENT, gradientColors, wrapBodyCached } from "./util";
@@ -629,6 +629,25 @@ export function App() {
     ? (tree.rows[tRow].kind === "letter" ? tree.rows[tRow].letter : null)
     : selected;
 
+  // Letterhead shown above vim while editing: the letter being edited (edit
+  // mode), or a compose draft — today's date, identity defaults, the typed
+  // subject (writeLetter resolves from/to the same way).
+  const editHeader = useMemo<Letter | null>(() => {
+    if (!edit) return null;
+    if (edit.mode === "edit") return letters.find((l) => l.key === edit.key) ?? null;
+    const cfg = loadConfig(JOURNAL);
+    return {
+      key: dayKey(new Date()),
+      date: new Date(),
+      meta: {
+        from: cfg.identity?.default_from ?? gitEmail() ?? "me",
+        to: cfg.identity?.default_to ?? "ME",
+        subject: edit.subject || "(no subject)",
+      },
+      body: "",
+    };
+  }, [edit, letters]);
+
   // Wrapped body lines of the selected letter (shared cache with LetterView).
   const bodyLines = useMemo(() => {
     if (!effectiveSelected) return [];
@@ -821,16 +840,20 @@ export function App() {
           // header's children get laid out at y=-1 and vanish from the output).
           <Box flexDirection="column" width={previewW} marginLeft={1} height={listH} overflowY="hidden">
             {editing ? (
-              // Embedded vim: the sidebar and top bar stay visible while the
-              // editor owns the right pane.
-              <VimPane
-                key={editSeq}
-                width={previewW}
-                height={listH}
-                file={editFileRef.current}
-                start={edit.mode === "compose" ? "insert" : "append"}
-                onExit={finishEdit}
-              />
+              // Embedded vim: the sidebar, top bar and the letter's
+              // letterhead stay visible while the editor owns the rest of
+              // the right pane.
+              <>
+                {editHeader && <LetterHeader letter={editHeader} width={previewW} />}
+                <VimPane
+                  key={editSeq}
+                  width={previewW}
+                  height={Math.max(3, listH - 5)}
+                  file={editFileRef.current}
+                  start={edit.mode === "compose" ? "insert" : "append"}
+                  onExit={finishEdit}
+                />
+              </>
             ) : effectiveSelected ? (
               <LetterView
                 letter={effectiveSelected}

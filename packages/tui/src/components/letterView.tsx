@@ -4,42 +4,28 @@ import { pad, rfcDate } from "fanaa-core";
 import type { Letter } from "../data";
 import { ACCENT, DIVIDER, FAINT, GOLD, MUTED, PAPER, SEL_BG, clean, truncate, wrapBodyCached } from "../util";
 
+/** Wrap email addresses in angle brackets; names ("ME") stay bare. */
+const email = (v: string) => (v.includes("@") ? `<${clean(v)}>` : clean(v));
+
 /**
- * A letter, laid out like a real letter: date/time, from/to, subject heading,
- * divider rule, then the markdown-formatted body (wrapped, scrollable via
- * `offset`). Serves both the browse-mode preview pane and the focused letter
- * view (which passes a highlightSubject flag and its own offset).
+ * A letter's letterhead: date/time, from/to, subject heading and the divider
+ * rule (5 rows total). Shared by LetterView and the edit pane, which keeps the
+ * letterhead visible above vim while writing.
  */
-export const LetterView = memo(function LetterView({
+export const LetterHeader = memo(function LetterHeader({
   letter,
   width,
-  height,
-  offset = 0,
   highlightSubject = false,
 }: {
   letter: Letter;
   width: number;
-  height?: number;
-  offset?: number;
   highlightSubject?: boolean;
 }) {
   const m = letter.meta;
-  // Wrap email addresses in angle brackets; names ("ME") stay bare. Control
-  // chars (ESC etc.) in frontmatter are stripped so they can't inject into
-  // the terminal.
-  const email = (v: string) => (v.includes("@") ? `<${clean(v)}>` : clean(v));
   const time = `${pad(letter.date.getHours())}:${pad(letter.date.getMinutes())}:${pad(letter.date.getSeconds())}`;
-  const body = letter.body.replace(/\n+$/, "");
-  const bodyLines = wrapBodyCached(letter.key, body, Math.max(20, width - 2));
-  // Reserve 5 rows for Date/From/To/Subject + the rule, plus one for "… more".
-  const overhead = 5;
-  const more = bodyLines.length > (offset + (height ?? 0));
-  const bodyCount = height ? Math.max(0, height - overhead - (more ? 1 : 0)) : undefined;
-  const shown = bodyCount !== undefined ? bodyLines.slice(offset, offset + bodyCount) : bodyLines.slice(offset);
   const rule = "\u2500".repeat(Math.max(4, width - 2));
-
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <>
       <Text>
         <Text color={FAINT}>Date:    </Text>
         <Text color={PAPER}>
@@ -61,6 +47,43 @@ export const LetterView = memo(function LetterView({
         </Text>
       </Text>
       <Text color={DIVIDER}>{rule}</Text>
+    </>
+  );
+});
+
+/**
+ * A letter, laid out like a real letter: date/time, from/to, subject heading,
+ * divider rule, then the markdown-formatted body (wrapped, scrollable via
+ * `offset`). Serves both the browse-mode preview pane and the focused letter
+ * view (which passes a highlightSubject flag and its own offset).
+ */
+export const LetterView = memo(function LetterView({
+  letter,
+  width,
+  height,
+  offset = 0,
+  highlightSubject = false,
+}: {
+  letter: Letter;
+  width: number;
+  height?: number;
+  offset?: number;
+  highlightSubject?: boolean;
+}) {
+  const m = letter.meta;
+  // Control chars (ESC etc.) in frontmatter are stripped so they can't inject
+  // into the terminal.
+  const body = letter.body.replace(/\n+$/, "");
+  const bodyLines = wrapBodyCached(letter.key, body, Math.max(20, width - 2));
+  // Reserve 5 rows for Date/From/To/Subject + the rule, plus one for "… more".
+  const overhead = 5;
+  const more = bodyLines.length > (offset + (height ?? 0));
+  const bodyCount = height ? Math.max(0, height - overhead - (more ? 1 : 0)) : undefined;
+  const shown = bodyCount !== undefined ? bodyLines.slice(offset, offset + bodyCount) : bodyLines.slice(offset);
+
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      <LetterHeader letter={letter} width={width} highlightSubject={highlightSubject} />
       <Box flexDirection="column">
         {shown.map((ln, i) => (
           <Text key={i}>
