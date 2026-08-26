@@ -195,23 +195,14 @@ ARCH="$(uname -m)"
 case "$OS" in
   Linux)  PLAT="linux" ;;
   Darwin) PLAT="darwin" ;;
-  MINGW*|MSYS*|CYGWIN*) PLAT="windows" ;;
-  *) _err "unsupported OS: $OS"; exit 1 ;;
+  *) _err "unsupported OS: $OS (fanaa ships for Linux and macOS only)"; exit 1 ;;
 esac
 case "$ARCH" in
   x86_64|amd64)  HARCH="x64" ;;
   aarch64|arm64) HARCH="arm64" ;;
   *) _err "unsupported architecture: $ARCH"; exit 1 ;;
 esac
-if [ "$PLAT" = "windows" ]; then
-  # Windows is only built for x64; the rest of this script still works under
-  # MSYS/Cygwin (curl is present). The binary lands as fanaa.exe.
-  [ "$HARCH" = "arm64" ] && { _err "no Windows arm64 build"; exit 1; }
-  EXE=".exe"
-else
-  EXE=""
-fi
-ASSET="fanaa-$PLAT-$HARCH$EXE"
+ASSET="fanaa-$PLAT-$HARCH"
 _info "installing $ASSET${VERSION:+ ($VERSION)} to $INSTALL_DIR"
 
 # --- resolve version (default: latest release) ----------------------------
@@ -284,19 +275,16 @@ chmod +x "$TMP/$ASSET"
 
 # --- install --------------------------------------------------------------
 mkdir -p "$INSTALL_DIR"
-INSTALLED="$INSTALL_DIR/fanaa$EXE"
+INSTALLED="$INSTALL_DIR/fanaa"
 mv -f "$TMP/$ASSET" "$INSTALLED"
 
 # --- post-install sanity --------------------------------------------------
-BIN_VER=""
-if [ -z "$EXE" ]; then
-  _ok "installed at $(_hl "$INSTALLED")"
-  if "$INSTALLED" --version >/dev/null 2>&1; then
-    BIN_VER="$("$INSTALLED" --version 2>/dev/null | head -1)"
-  else
-    _err "installed, but the binary did not run cleanly — check $INSTALLED"
-    exit 1
-  fi
+_ok "installed at $(_hl "$INSTALLED")"
+if "$INSTALLED" --version >/dev/null 2>&1; then
+  BIN_VER="$("$INSTALLED" --version 2>/dev/null | head -1)"
+else
+  _err "installed, but the binary did not run cleanly — check $INSTALLED"
+  exit 1
 fi
 
 # journal store — created lazily on first run, but make it now so the TUI's

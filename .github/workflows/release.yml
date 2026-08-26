@@ -33,9 +33,8 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p dist
-          for t in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do
+          for t in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64; do
             out="dist/fanaa-${t#bun-}"
-            [ "$t" = "bun-windows-x64" ] && out="${out}.exe"
             bun build --compile --target="$t" packages/cli/src/index.ts --outfile "$out"
           done
 

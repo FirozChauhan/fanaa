@@ -19,16 +19,18 @@ curl -fsSL https://raw.githubusercontent.com/FirozChauhan/fanaa/main/install.sh 
 Installs the latest release to `~/.local/bin/fanaa` (override with
 `FANAA_BIN`), verifies the SHA-256 checksum, and creates `~/.fanaa`.
 Pin a version with `| sh -s -- v0.8.1`. Linux (x64/arm64), macOS
-(x64/arm64), and Windows x64 (via MSYS/Cygwin) are prebuilt on every
+(x64/arm64) are prebuilt on every
 `v*` tag — see [the release workflow](.github/workflows/release.yml).
 
-**From source:**
+**From source** (GitHub):
 
 ```bash
-cd packages/cli
-bun install
-bun link          # makes `fanaa` available everywhere
+git clone https://github.com/FirozChauhan/fanaa
+cd fanaa
 ```
+
+The repo builds into a single static `fanaa` binary (CLI + TUI) — see
+`packages/` for the CLI, TUI, sync engine, and the Hono API worker.
 
 ## Usage
 
