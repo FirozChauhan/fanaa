@@ -1,0 +1,915 @@
+<!doctype html>
+<!-- fanaa showcase — polished carousel of the real TUI, ember-themed.
+     Reuses styles.css for the topbar / footer / fonts / brand.
+     Self-contained carousel styles + logic in this file. -->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#000000" />
+    <title>Showcase — FANAA</title>
+    <meta name="description" content="See fanaa in action: install, boot, browse, compose." />
+    <link rel="canonical" href="https://fanaa.sh/showcase" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=JetBrains+Mono:wght@400;500;600&family=Aref+Ruqaa:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ── page layout — one viewport, no scroll ─────────────────────────── */
+      .stage { height: 100dvh; min-height: 0; overflow: hidden; }
+      /* home page flips the aurora canvas; our ember particles don't need it */
+      .stage > .bg-canvas { transform: none; }
+
+      .showcase-page {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 7rem 1.25rem 1rem; /* 7rem clears the fixed topbar + a real top margin */
+        overflow: hidden;
+      }
+      .showcase-page > .carousel {
+        width: 100%;
+        max-width: 1040px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .showcase-page .sh-header { text-align: center; margin-bottom: 0.8rem; }
+      .showcase-page .sh-header h1 {
+        font-size: clamp(1.15rem, 0.9rem + 1.4vw, 1.5rem);
+        font-weight: 500;
+        letter-spacing: -0.03em;
+      }
+
+      /* ── ember palette (scoped to .showcase) ───────────────────────────── */
+      .showcase {
+        --sh-accent: #ffa94d;
+        --sh-gold: #ffd88a;
+        --sh-amber: #c98a3d;
+        --sh-paper: #cfc7b8;
+        --sh-muted: #8a8175;
+        --sh-faint: #5c564d;
+        --sh-divider: #3a362f;
+        --sh-selbg: #3a3124;
+        --sh-bg: #0b0906;
+        --sh-tbar: #141009;
+      }
+
+      /* ── carousel ─────────────────────────────────────────────────────── */
+      .showcase .carousel, .showcase.carousel { position: relative; }
+      .showcase .viewport {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 14px;
+      }
+      .showcase .track {
+        height: 100%;
+        display: flex;
+        transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .showcase .slide {
+        min-width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 0 4px;
+        display: flex;
+        flex-direction: column;
+        opacity: 0.3;
+        transform: scale(0.96);
+        transition: opacity 0.55s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .showcase .slide.active { opacity: 1; transform: scale(1); }
+
+      /* ── terminal window ──────────────────────────────────────────────── */
+      .showcase .terminal {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--sh-bg);
+        border: 1px solid var(--sh-divider);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+      }
+      .showcase .terminal::before {
+        content: "";
+        display: block;
+        height: 2px;
+        background: linear-gradient(90deg, var(--sh-amber), var(--sh-gold), var(--sh-amber));
+      }
+
+      .showcase .tbar {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        background: var(--sh-tbar);
+        border-bottom: 1px solid var(--sh-divider);
+      }
+      .showcase .tbar .dot { width: 12px; height: 12px; border-radius: 50%; }
+      .showcase .tbar .r { background: #ff5f57; }
+      .showcase .tbar .y { background: #febc2e; }
+      .showcase .tbar .g { background: #28c840; }
+      .showcase .ttitle {
+        flex: 1;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--sh-faint);
+        letter-spacing: 0.05em;
+      }
+
+      .showcase .tbody {
+        flex: 1;
+        min-height: 0;
+        font-family: var(--font-mono);
+        font-size: clamp(0.62rem, 0.54rem + 0.24vw, 0.7rem);
+        line-height: 1.45;
+        color: var(--sh-paper);
+        padding: 0.9rem 1.5rem 1.1rem;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .showcase .tbody .prompt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .showcase .p { color: var(--sh-accent); font-weight: 600; }
+      .showcase .muted { color: var(--sh-muted); }
+      .showcase .faint { color: var(--sh-faint); }
+      .showcase .hl { color: var(--sh-gold); font-weight: 600; }
+      .showcase .ok { color: var(--sh-accent); }
+      .showcase .sp { display: inline-block; width: 1em; }
+      .showcase .okline { margin-top: 0.45rem; }
+
+      /* logo */
+      .showcase .logo {
+        margin: 0.85rem 0 0;
+        font-family: var(--font-mono);
+        font-weight: 600;
+        white-space: pre;
+        line-height: 1.2;
+        background: linear-gradient(90deg, var(--sh-amber), var(--sh-gold), var(--sh-amber));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        width: fit-content;
+      }
+
+      .showcase .motto {
+        margin: 0.65rem 0 0;
+        color: var(--sh-accent);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .showcase .rule {
+        margin: 0.5rem 0;
+        color: var(--sh-faint);
+        letter-spacing: -2px;
+        opacity: 0.5;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .showcase .ready { margin-top: 0.6rem; }
+
+      /* progress bar */
+      .showcase .dl { margin-top: 4px; white-space: nowrap; }
+      .showcase .bar {
+        display: inline-block;
+        vertical-align: middle;
+        width: 150px;
+        height: 8px;
+        border-radius: 3px;
+        background: var(--sh-divider);
+        opacity: 0.5;
+        overflow: hidden;
+        margin: 0 10px;
+      }
+      .showcase .bar .fill {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: 3px;
+        background: linear-gradient(90deg, var(--sh-amber), var(--sh-gold));
+      }
+      .showcase .slide.active .bar .fill {
+        animation: barfill 2.2s cubic-bezier(0.25, 0.8, 0.3, 1) 0.2s both;
+      }
+      @keyframes barfill { from { width: 0; } to { width: 100%; } }
+
+      /* cursor */
+      .showcase .cursor {
+        display: inline-block;
+        width: 8px;
+        height: 1.15em;
+        vertical-align: text-bottom;
+        background: var(--sh-accent);
+        animation: blink 1.1s steps(1) infinite;
+      }
+      @keyframes blink { 50% { opacity: 0; } }
+
+      /* ── boot splash (slide 2) ────────────────────────────────────────── */
+      .showcase .splash-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0.9rem 1.5rem 1.1rem;
+        box-sizing: border-box;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: clamp(0.6rem, 0.52rem + 0.24vw, 0.68rem);
+        line-height: 1.45;
+        color: var(--sh-paper);
+        overflow: hidden;
+      }
+      .showcase .splash-body .logo {
+        margin: 0 auto;
+        font-size: clamp(0.58rem, 0.5rem + 0.24vw, 0.68rem);
+      }
+      .showcase .splash-body .motto { margin: 0.9rem 0 0; }
+      .showcase .splash-body .hint {
+        margin-top: 1.1rem;
+        color: var(--sh-faint);
+        font-size: 0.9em;
+      }
+
+      /* ── browse two-pane (slide 3) ────────────────────────────────────── */
+      .showcase .browse {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        font-family: var(--font-mono);
+        font-size: clamp(0.62rem, 0.54rem + 0.24vw, 0.7rem);
+        line-height: 1.45;
+        color: var(--sh-paper);
+        padding: 0;
+        overflow: hidden;
+      }
+      .showcase .browse .bcol {
+        display: flex;
+        flex-direction: column;
+      }
+      .showcase .browse .bcol-side {
+        min-width: 26ch;
+        max-width: 26ch;
+        padding: 0.7rem 0 0.7rem 0.9rem;
+        flex-shrink: 0;
+      }
+      .showcase .browse .bcol-preview {
+        flex: 1;
+        padding: 0.7rem 0.9rem 0.7rem 0;
+        overflow: hidden;
+      }
+      .showcase .browse .bdivider {
+        color: var(--sh-divider);
+        padding: 0.7rem 0.4rem 0.7rem 0.2rem;
+        user-select: none;
+      }
+      .showcase .browse .br-title {
+        color: var(--sh-gold);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.5rem;
+      }
+      .showcase .browse .br-title span {
+        background: linear-gradient(90deg, var(--sh-amber), var(--sh-gold));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .showcase .browse .br-row {
+        padding: 1px 8px 1px 4px;
+        border-radius: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .showcase .browse .br-row .id {
+        color: var(--sh-muted);
+      }
+      .showcase .browse .br-row .subj {
+        color: var(--sh-paper);
+      }
+      .showcase .browse .br-row.sel {
+        background: var(--sh-selbg);
+      }
+      .showcase .browse .br-row.sel .id,
+      .showcase .browse .br-row.sel .subj {
+        color: var(--sh-gold);
+        font-weight: 600;
+      }
+      .showcase .browse .br-divider {
+        color: var(--sh-divider);
+        margin: 0.4rem 0;
+        letter-spacing: -2px;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .showcase .browse .br-footer {
+        margin-top: 0.4rem;
+        font-size: 0.95em;
+      }
+      .showcase .browse .br-footer .ver { color: var(--sh-muted); }
+      .showcase .browse .br-footer .sep { color: var(--sh-faint); }
+      .showcase .browse .br-footer .theme { color: var(--sh-accent); }
+
+      /* letterhead in preview */
+      .showcase .browse .lh { line-height: 1.55; }
+      .showcase .browse .lh .lbl { color: var(--sh-faint); }
+      .showcase .browse .lh .val { color: var(--sh-paper); }
+      .showcase .browse .lh .val-to { color: var(--sh-accent); }
+      .showcase .browse .lh .val-subj { color: var(--sh-gold); font-weight: 600; }
+      .showcase .browse .lh .div { color: var(--sh-divider); margin: 0.4rem 0; letter-spacing: -2px; overflow: hidden; white-space: nowrap; }
+
+      .showcase .browse .body {
+        margin-top: 0.4rem;
+        color: var(--sh-paper);
+        line-height: 1.55;
+      }
+      .showcase .browse .body .ellipsis { color: var(--sh-faint); }
+
+      /* ── compose (slide 4) ────────────────────────────────────────────── */
+      .showcase .compose-body {
+        flex: 1;
+        min-height: 0;
+        font-family: var(--font-mono);
+        font-size: clamp(0.62rem, 0.54rem + 0.24vw, 0.7rem);
+        line-height: 1.45;
+        color: var(--sh-paper);
+        padding: 0.75rem 1.5rem 1.1rem;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .showcase .compose-body .comp-title {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.5rem;
+      }
+      .showcase .compose-body .comp-title span {
+        background: linear-gradient(90deg, var(--sh-amber), var(--sh-gold));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .showcase .compose-body .comp-prompt {
+        margin-top: 0.6rem;
+        color: var(--sh-muted);
+      }
+      .showcase .compose-body .comp-input {
+        margin-top: 0.3rem;
+        color: var(--sh-paper);
+      }
+      .showcase .compose-body .comp-input .chevron { color: var(--sh-accent); font-weight: 700; }
+      .showcase .compose-body .comp-hint {
+        margin-top: 0.5rem;
+        color: var(--sh-faint);
+        font-size: 0.95em;
+      }
+      .showcase .compose-body .lh {
+        margin-top: 1rem;
+        line-height: 1.55;
+      }
+      .showcase .compose-body .lh .lbl { color: var(--sh-faint); }
+      .showcase .compose-body .lh .val { color: var(--sh-paper); }
+      .showcase .compose-body .lh .val-to { color: var(--sh-accent); }
+      .showcase .compose-body .lh .val-subj { color: var(--sh-gold); font-weight: 600; }
+      .showcase .compose-body .lh .div { color: var(--sh-divider); margin: 0.4rem 0; letter-spacing: -2px; overflow: hidden; white-space: nowrap; }
+
+      .showcase .compose-body .vim {
+        margin-top: 0.5rem;
+        border: 1px solid var(--sh-divider);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .showcase .compose-body .vim .row { padding: 1px 10px; white-space: pre; }
+      .showcase .compose-body .vim .row .ln {
+        display: inline-block;
+        width: 2.2em;
+        text-align: right;
+        color: var(--sh-faint);
+        margin-right: 1.2em;
+        user-select: none;
+      }
+      .showcase .compose-body .vim .row.hot { background: color-mix(in oklch, var(--sh-accent) 8%, transparent); }
+      .showcase .compose-body .vim .status {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 10px;
+        background: var(--sh-bg);
+        border-top: 1px solid var(--sh-divider);
+        color: var(--sh-faint);
+        font-size: 11px;
+      }
+      .showcase .compose-body .vim .status b { color: var(--sh-accent); font-weight: 600; }
+
+      /* ── captions ─────────────────────────────────────────────────────── */
+      .showcase .caption { text-align: center; margin-top: 0.7rem; padding: 0 8px; }
+      .showcase .caption h3 {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: var(--fg);
+        letter-spacing: -0.01em;
+      }
+      .showcase .caption p {
+        color: var(--fg-faint);
+        max-width: 46ch;
+        margin: 0.25rem auto 0;
+        font-size: 0.76rem;
+        line-height: 1.5;
+      }
+
+      /* ── nav arrows ───────────────────────────────────────────────────── */
+      .showcase .nav {
+        position: absolute;
+        /* dots row below the viewport pulls the carousel center ~10px low;
+           nudge up so the arrows sit dead-centre on the image */
+        top: calc(50% - 10px);
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid var(--sh-divider);
+        background: color-mix(in oklch, var(--sh-bg) 85%, white 15%);
+        color: var(--sh-muted);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        transition: all 0.25s;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .showcase .nav:hover { border-color: var(--sh-accent); color: var(--sh-gold); transform: translateY(-50%) scale(1.06); }
+      .showcase .nav-prev { left: -58px; }
+      .showcase .nav-next { right: -58px; }
+
+      /* wide carousel → arrows stay outside the terminal; tuck in below 1180px */
+      @media (max-width: 1180px) {
+        .showcase .nav-prev { left: -8px; }
+        .showcase .nav-next { right: -8px; }
+        .showcase .nav { width: 40px; height: 40px; font-size: 18px; }
+      }
+      @media (max-width: 560px) {
+        .showcase .nav { display: none; }
+      }
+
+      /* ── dots ─────────────────────────────────────────────────────────── */
+      .showcase .dots {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 0.75rem;
+      }
+      .showcase .dots button {
+        width: 8px;
+        height: 8px;
+        border: 0;
+        padding: 0;
+        border-radius: 99px;
+        background: var(--sh-divider);
+        cursor: pointer;
+        transition: all 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .showcase .dots button.on {
+        width: 30px;
+        background: var(--sh-accent);
+      }
+      .showcase .dots button:hover { background: var(--sh-muted); }
+      .showcase .dots button.on:hover { background: var(--sh-accent); }
+
+      /* ── compact on short viewports ───────────────────────────────────── */
+      @media (max-height: 720px) {
+        .showcase .tbody, .showcase .splash-body,
+        .showcase .browse, .showcase .compose-body {
+          font-size: 0.66rem;
+          line-height: 1.4;
+        }
+        .showcase .browse .br-row { padding: 0 8px 0 4px; }
+        .showcase .compose-body .vim .row { padding: 0 10px; }
+      }
+
+      /* ── reduced motion ───────────────────────────────────────────────── */
+      @media (prefers-reduced-motion: reduce) {
+        .showcase .track, .showcase .slide, .showcase .nav,
+        .showcase .dots button, .showcase .bar .fill {
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <!-- subtle ember particle field (home page's starfield, toned way down) -->
+      <div id="bg" class="bg-canvas" aria-hidden="true"></div>
+      <!-- scanlines (no starfield on this page) -->
+      <span class="scanlines" aria-hidden="true"></span>
+
+      <header class="topbar" id="topbar">
+        <div class="topbar-inner">
+          <a class="brand" href="index.html" aria-label="fanaa home">
+            <span class="brand-word" aria-hidden="true">FANAA</span>
+            <span class="sr-only">Fanaa</span>
+          </a>
+          <nav class="topnav" aria-label="Primary">
+            <a class="nav-link" href="index.html">Home</a>
+            <a class="nav-link" href="showcase.html" aria-current="page">Showcase</a>
+            <a class="nav-link nav-external" href="https://github.com/FirozChauhan/fanaa" target="_blank" rel="noreferrer noopener" aria-label="fanaa on GitHub">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.53-2.55-.29-5.23-1.28-5.23-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.35.77 1.05.77 2.12 0 1.53-.01 2.76-.01 3.14 0 .31.21.67.8.56A11.52 11.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>
+              </svg>
+              <span class="nav-external-label">GitHub <span aria-hidden="true">↗</span></span>
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      <main id="main" class="showcase-page">
+        <div class="sh-header">
+          <h1 class="display">From one command to <span class="accent-grad">your first letter.</span></h1>
+        </div>
+
+        <div class="carousel showcase" id="carousel" aria-roledescription="carousel" aria-label="fanaa showcase">
+          <button class="nav nav-prev" type="button" aria-label="Previous slide">‹</button>
+          <button class="nav nav-next" type="button" aria-label="Next slide">›</button>
+
+          <div class="viewport">
+            <div class="track" style="transform: translateX(-100%)">
+
+              <!-- ── slide 1 · install ────────────────────────────────── -->
+              <div class="slide" role="group" aria-roledescription="slide" aria-label="1 of 4">
+                <div class="terminal">
+                  <div class="tbar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="ttitle">fanaa · zsh</span></div>
+                  <div class="tbody">
+                    <div class="prompt"><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/FirozChauhan/fanaa/main/install.sh | sh</div>
+                    <pre class="logo">███████ ███████ ██   ██ ███████ ███████
+██      ██   ██ ███  ██ ██   ██ ██   ██
+███████ ███████ ██ █ ██ ███████ ███████
+██      ██   ██ ██  ███ ██   ██ ██   ██
+██      ██   ██ ██   ██ ██   ██ ██   ██</pre>
+                    <div class="motto">write letters only you will ever read.</div>
+                    <div class="rule">────────────────────────────────────────</div>
+                    <div><span class="ok">✓</span> resolved <span class="hl">v0.9.0</span></div>
+                    <div class="dl"><span class="ok">✓</span> downloading fanaa-linux-x64 <span class="bar"><span class="fill"></span></span><span class="hl">100%</span> <span class="muted">96.9 MiB</span></div>
+                    <div><span class="ok">✓</span> checksum <span class="hl">OK</span></div>
+                    <div><span class="ok">✓</span> installed at <span class="hl">/home/you/.local/bin/fanaa</span></div>
+                    <div class="ready"><span class="ok">✓</span> fanaa <span class="hl">0.8.1</span> ready — run '<span class="hl">fanaa tui</span>' to write your first letter.<span class="cursor"></span></div>
+                  </div>
+                </div>
+                <div class="caption">
+                  <h3>Install in seconds</h3>
+                  <p>One command. One static binary. SHA-256 verified.</p>
+                </div>
+              </div>
+
+              <!-- ── slide 2 · boot splash ────────────────────────────── -->
+              <div class="slide" role="group" aria-roledescription="slide" aria-label="2 of 4">
+                <div class="terminal">
+                  <div class="tbar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="ttitle">fanaa · zsh</span></div>
+                  <div class="splash-body">
+                    <div class="prompt"><span class="p">$</span> fanaa tui</div>
+                    <pre class="logo">███████ ███████ ██   ██ ███████ ███████
+██      ██   ██ ███  ██ ██   ██ ██   ██
+███████ ███████ ██ █ ██ ███████ ███████
+██      ██   ██ ██  ███ ██   ██ ██   ██
+██      ██   ██ ██   ██ ██   ██ ██   ██</pre>
+                    <div class="motto">write letters only you will ever read.</div>
+                    <div class="hint">fanaa 0.8.1 <span class="muted">— press any key</span></div>
+                  </div>
+                </div>
+                <div class="caption">
+                  <h3>Boot the fanaa TUI</h3>
+                  <p>The real splash — amber logo, dark terminal, one keystroke away.</p>
+                </div>
+              </div>
+
+              <!-- ── slide 3 · browse (real two-pane) ─────────────────── -->
+              <div class="slide" role="group" aria-roledescription="slide" aria-label="3 of 4">
+                <div class="terminal">
+                  <div class="tbar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="ttitle">fanaa · zsh</span></div>
+                  <div class="browse">
+                    <div class="bcol bcol-side">
+                      <div class="br-title"><span>FANAA</span></div>
+                      <div class="br-row sel">
+                        <span class="id">1220EACO</span>: <span class="subj">The trouble with time</span>
+                      </div>
+                      <div class="br-row">
+                        <span class="id">0FE3B2K</span>: <span class="subj">Untitled draft</span>
+                      </div>
+                      <div class="br-row">
+                        <span class="id">A7C9D4E</span>: <span class="subj">Sunday walk</span>
+                      </div>
+                      <div class="br-row">
+                        <span class="id">B22E001</span>: <span class="subj">what i almost said</span>
+                      </div>
+                      <div class="br-divider">────────────────────────</div>
+                      <div class="br-footer">
+                        <span class="ver">0.8.1</span><span class="sep"> · </span>P: sync<span class="sep"> · </span><span class="theme">ember</span>
+                      </div>
+                    </div>
+                    <div class="bdivider">│</div>
+                    <div class="bcol bcol-preview">
+                      <div class="lh">
+                        <div><span class="lbl">Date:    </span><span class="val">26 AUG 2026  12:20:37</span></div>
+                        <div><span class="lbl">From:    </span><span class="val">ME</span></div>
+                        <div><span class="lbl">To:      </span><span class="val-to">FUTURE-YOU</span></div>
+                        <div><span class="lbl">Subject: </span><span class="val-subj">THE TROUBLE WITH TIME</span></div>
+                        <div class="div">───────────────────────────────</div>
+                      </div>
+                      <div class="body">
+                        Dear stranger who will never read this,<br />
+                        <br />
+                        The stars tonight look exactly the way they looked<br />
+                        the first time I realised I was alone — bright,<br />
+                        indifferent, and impossibly far away.<br />
+                        <br />
+                        I am writing this because it is easier than<br />
+                        saying it out loud.<br />
+                        <span class="ellipsis">… more</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="caption">
+                  <h3>Browse your letters</h3>
+                  <p>Unique IDs, subjects, full letterhead — the real read view.</p>
+                </div>
+              </div>
+
+              <!-- ── slide 4 · compose (real subject prompt + vim) ────── -->
+              <div class="slide" role="group" aria-roledescription="slide" aria-label="4 of 4">
+                <div class="terminal">
+                  <div class="tbar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="ttitle">fanaa · zsh</span></div>
+                  <div class="compose-body">
+                    <div class="comp-title"><span>FANAA</span></div>
+                    <div class="comp-prompt">a new letter — subject first, then vim</div>
+                    <div class="comp-input">
+                      <span class="chevron">❯</span> the trouble with time
+                    </div>
+                    <div class="comp-hint">enter = vim · esc = cancel</div>
+
+                    <div class="lh">
+                      <div><span class="lbl">Date:    </span><span class="val">26 AUG 2026  12:20:37</span></div>
+                      <div><span class="lbl">From:    </span><span class="val">ME</span></div>
+                      <div><span class="lbl">To:      </span><span class="val-to">FUTURE-YOU</span></div>
+                      <div><span class="lbl">Subject: </span><span class="val-subj">THE TROUBLE WITH TIME</span></div>
+                      <div class="div">───────────────────────────────</div>
+                    </div>
+
+                    <div class="vim">
+                      <div class="row"><span class="ln">1</span>---<span class="muted">to:</span> future-you&nbsp;&nbsp;<span class="muted">subject:</span> the trouble with time</div>
+                      <div class="row"><span class="ln">2</span></div>
+                      <div class="row hot"><span class="ln">3</span>Dear stranger who will never read this,</div>
+                      <div class="row"><span class="ln">4</span></div>
+                      <div class="row"><span class="ln">5</span>The stars tonight look exactly the way they looked</div>
+                      <div class="row"><span class="ln">6</span>the first time I realised I was alone — bright,</div>
+                      <div class="row"><span class="ln">7</span>indifferent, and impossibly far away.</div>
+                      <div class="row"><span class="ln">8</span></div>
+                      <div class="row"><span class="ln">9</span>I am writing this because it is easier than</div>
+                      <div class="row"><span class="ln">10</span>saying it out loud.<span class="cursor"></span></div>
+                      <div class="status"><b>-- INSERT --</b><span>frontmatter.md</span><span>10,10 &nbsp;All</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="caption">
+                  <h3>Compose in vim</h3>
+                  <p>Subject prompt first, then vim — exactly how it works.</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div class="dots" role="tablist" aria-label="Choose slide"></div>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span class="footer-fade" aria-hidden="true"></span>
+        <div class="footer-inner">
+          <a class="footer-brand" href="index.html" aria-label="fanaa home">
+            <svg class="brand-mark" width="26" height="26" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="oklch(86% 0.13 360)"/>
+                  <stop offset="0.45" stop-color="oklch(76% 0.20 350)"/>
+                  <stop offset="1" stop-color="oklch(66% 0.24 340)"/>
+                </linearGradient>
+              </defs>
+              <rect x="2" y="2" width="18" height="18" rx="4.5" stroke="url(#brand-grad)" stroke-width="1.5"/>
+              <rect x="6" y="6.5" width="10" height="2.4" rx="1.2" fill="url(#brand-grad)"/>
+              <rect x="6" y="10.5" width="7" height="2.4" rx="1.2" fill="url(#brand-grad)" opacity="0.55"/>
+              <rect x="6" y="14.5" width="4" height="2.4" rx="1.2" fill="url(#brand-grad)" opacity="0.28"/>
+            </svg>
+          </a>
+          <p class="copy-pill">فیروز چوہان</p>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      /* ---------------------------------------------------------------- topbar scroll */
+      (function() {
+        var tb = document.getElementById("topbar");
+        if (tb) {
+          function onScroll() { tb.classList.toggle("scrolled", window.scrollY > 24); }
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+        }
+      })();
+
+      /* ---------------------------------------------------------------- showcase carousel */
+      (function() {
+        var carousel = document.getElementById("carousel");
+        if (!carousel) return;
+
+        var track    = carousel.querySelector(".track");
+        var slides   = Array.prototype.slice.call(carousel.querySelectorAll(".slide"));
+        var dotsWrap = carousel.querySelector(".dots");
+        var prev     = carousel.querySelector(".nav-prev");
+        var next     = carousel.querySelector(".nav-next");
+        var n = slides.length;
+        if (!track || n === 0) return;
+
+        var i = 0, pos = 0, timer = null, touchX = null, busy = false;
+        var AUTOPLAY = 5200;
+        var reduced  = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        slides.forEach(function(_, k) {
+          var d = document.createElement("button");
+          d.type = "button";
+          d.setAttribute("aria-label", "Go to slide " + (k + 1));
+          d.addEventListener("click", function() { go(k); restart(); });
+          dotsWrap.appendChild(d);
+        });
+        var dots = Array.prototype.slice.call(dotsWrap.children);
+
+        /* seamless loop: clone the last slide before the first and the
+           first after the last; real slide k sits at track position k+1 */
+        var cloneHead = slides[n - 1].cloneNode(true);
+        var cloneTail = slides[0].cloneNode(true);
+        cloneHead.classList.remove("active");
+        cloneTail.classList.remove("active");
+        track.insertBefore(cloneHead, slides[0]);
+        track.appendChild(cloneTail);
+
+        function setPos(p, animate) {
+          track.style.transition = animate ? "" : "none";
+          track.style.transform = "translateX(-" + p * 100 + "%)";
+          pos = p;
+        }
+        function updateUI() {
+          slides.forEach(function(s, j) { s.classList.toggle("active", j === i); });
+          dots.forEach(function(d, j) { d.classList.toggle("on", j === i); });
+        }
+        function go(k) {
+          if (busy) return;
+          var wrapping = (k < 0 || k >= n);
+          if (wrapping && !reduced) {
+            /* wrap through the clone so the loop keeps moving forward /
+               backward and never rewinds across the whole set */
+            var wrapPrev = k < 0;
+            i = (k + n) % n;
+            var clone = wrapPrev ? cloneHead : cloneTail;
+            clone.classList.add("active");
+            updateUI();
+            setPos(wrapPrev ? 0 : n + 1, true); /* slide into the clone */
+            busy = true;
+            /* the CSS transition is 0.7s; right after it, snap to the
+               identical real slide with transitions off so the wrap reads
+               as seamless. setTimeout (not transitionend) keeps this
+               deterministic across browsers. */
+            setTimeout(function() {
+              clone.classList.remove("active");
+              track.style.transition = "none";
+              void track.offsetWidth; /* flush so the snap isn't animated */
+              setPos(wrapPrev ? n : 1, false);
+              updateUI();
+              busy = false;
+            }, 780);
+          } else {
+            i = (k + n) % n;
+            setPos(i + 1, true);
+            updateUI();
+          }
+        }
+        function play()    { stop(); timer = setInterval(function() { go(i + 1); }, AUTOPLAY); }
+        function stop()    { clearInterval(timer); }
+        function restart() { if (!reduced) play(); }
+
+        var inView = function() {
+          var r = carousel.getBoundingClientRect();
+          return r.top < window.innerHeight && r.bottom > 0;
+        };
+
+        prev.addEventListener("click", function() { go(i - 1); restart(); });
+        next.addEventListener("click", function() { go(i + 1); restart(); });
+        carousel.addEventListener("mouseenter", stop);
+        carousel.addEventListener("mouseleave", play);
+        carousel.addEventListener("focusin", stop);
+        carousel.addEventListener("focusout", function(e) { if (!carousel.contains(e.relatedTarget)) play(); });
+
+        document.addEventListener("keydown", function(e) {
+          if (!inView()) return;
+          if (e.key === "ArrowLeft")  { go(i - 1); restart(); }
+          if (e.key === "ArrowRight") { go(i + 1); restart(); }
+        });
+
+        carousel.addEventListener("touchstart", function(e) { touchX = e.touches[0].clientX; }, { passive: true });
+        carousel.addEventListener("touchend", function(e) {
+          if (touchX === null) return;
+          var dx = e.changedTouches[0].clientX - touchX;
+          if (Math.abs(dx) > 40) { go(dx < 0 ? i + 1 : i - 1); restart(); }
+          touchX = null;
+        }, { passive: true });
+
+        var pinned = /[?&]slide=(\d+)/.exec(location.search);
+        i = pinned ? (parseInt(pinned[1], 10) - 1 + n) % n : 0;
+        setPos(i + 1, false); /* first paint, no animation */
+        updateUI();
+        if (!reduced && !pinned) play();
+      })();
+
+      /* ---------------------------------------------------------------- subtle ember particles */
+      /* Sparse amber-gold specks, drifting slowly. Same family as the home
+         page's aurora starfield but far more understated — no aurora, no
+         grain, just faint dots. Skips on prefers-reduced-motion. */
+      (function() {
+        var bg = document.getElementById("bg");
+        if (!bg) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        var c = document.createElement("canvas");
+        c.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+        bg.appendChild(c);
+        var ctx = c.getContext("2d");
+        if (!ctx) return;
+
+        var W = 0, H = 0, parts = [];
+        var COUNT = 250;
+
+        function build() {
+          var rect = bg.getBoundingClientRect();
+          var dpr = Math.min(2, window.devicePixelRatio || 1);
+          W = Math.max(1, Math.round(rect.width * dpr));
+          H = Math.max(1, Math.round(rect.height * dpr));
+          c.width = W;
+          c.height = H;
+          parts = [];
+          for (var i = 0; i < COUNT; i++) {
+            parts.push({
+              x: Math.random() * W,
+              y: Math.random() * H,
+              r: (0.6 + Math.random() * 1.8) * dpr,
+              vx: (Math.random() - 0.5) * 0.35,
+              vy: (Math.random() - 0.5) * 0.35,
+              hue: 32 + Math.random() * 22,       /* amber -> gold */
+              o: 0.10 + Math.random() * 0.25,     /* 10-35% — visible but soft */
+              tw: 0.2 + Math.random() * 0.8,      /* twinkle phase */
+              ts: 0.5 + Math.random() * 1.2,      /* twinkle speed */
+            });
+          }
+        }
+
+        function frame(t) {
+          ctx.clearRect(0, 0, W, H);
+          var twinkle = (t || 0) / 1000;
+          for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0) p.x += W;
+            if (p.x > W) p.x -= W;
+            if (p.y < 0) p.y += H;
+            if (p.y > H) p.y -= H;
+            var o = p.o * (0.7 + 0.3 * Math.sin(twinkle * p.ts + p.tw));
+            if (o <= 0.01) continue;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = "hsla(" + p.hue + ", 70%, 78%, " + o.toFixed(3) + ")";
+            ctx.fill();
+          }
+          requestAnimationFrame(frame);
+        }
+
+        build();
+        requestAnimationFrame(frame);
+        window.addEventListener("resize", build);
+      })();
+    </script>
+  </body>
+</html>
