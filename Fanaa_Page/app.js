@@ -8,7 +8,7 @@
 
 /* install options — commands are aspirational until the CLI actually ships */
 const INSTALLS = [
-  { id: "curl", label: "curl", cmd: "curl -fsSL https://fanaa.sh/install | sh", hint: "macOS · Linux" },
+  { id: "curl", label: "curl", cmd: "curl -fsSL https://raw.githubusercontent.com/FirozChauhan/fanaa/main/install.sh | sh", hint: "macOS · Linux" },
   { id: "src", label: "src", cmd: "git clone https://github.com/FirozChauhan/fanaa", hint: "from source" },
 ];
 
