@@ -96,10 +96,10 @@ _logo() {
 # --- banner -----------------------------------------------------------------
 _logo
 if [ "$C" = 1 ]; then
-  printf '  %s[1;%smfanaa — curl | sh installer%s\n' "$ESC" "$ACCENT" "$RESET"
-  printf '  %s[%sm──────────────────────────────%s\n' "$ESC" "$PAPER" "$RESET"
+  printf '  %s[1;%smwrite letters only you will ever read.%s\n' "$ESC" "$ACCENT" "$RESET"
+  printf '  %s[%sm──────────────────────────────────────%s\n' "$ESC" "$PAPER" "$RESET"
 else
-  echo "  fanaa — curl | sh installer"
+  echo "  write letters only you will ever read."
 fi
 echo
 
@@ -151,8 +151,15 @@ case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 TMP="$(mktemp -d 2>/dev/null || mktemp -d /tmp/fanaa.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Show curl's own progress bar only when stderr is a terminal; keep downloads
+# silent otherwise (piped/logged runs shouldn't spam the bar).
+if [ -t 2 ]; then
+  PB="--progress-bar"
+else
+  PB="-s"
+fi
 _info "downloading $(_hl "$ASSET")"
-curl -fsSL "$BASE/$VERSION/$ASSET" -o "$TMP/$ASSET"
+curl -fL $PB "$BASE/$VERSION/$ASSET" -o "$TMP/$ASSET"
 curl -fsSL "$BASE/$VERSION/SHA256SUMS" -o "$TMP/SHA256SUMS"
 
 if command -v sha256sum >/dev/null 2>&1; then
