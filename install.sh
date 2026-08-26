@@ -40,22 +40,45 @@ AMBER="38;2;201;138;61"
 GOLD="38;2;255;216;138"
 ACCENT="38;2;255;169;77"
 PAPER="38;2;207;199;184"
+MUTED="38;2;138;129;117"
 ERR="38;2;255;109;109"
+
+# --- terminal width + centering helpers -----------------------------------
+# COLS drives horizontal centering (fallback 80 when width is unknown).
+COLS=$(tput cols 2>/dev/null || echo 80)
+[ "$COLS" -ge 60 ] || COLS=80
+# _pad WIDTH — print enough leading spaces to center a WIDTH-wide block.
+_pad() {
+  n=$(( (COLS - $1) / 2 ))
+  [ "$n" -lt 0 ] && n=0
+  printf '%*s' "$n" ""
+}
+# _rule — a subtle centered hairline divider (capped width).
+_rule() {
+  w=$COLS; [ "$w" -gt 72 ] && w=72
+  line=""; i=0
+  while [ "$i" -lt "$w" ]; do line="$line─"; i=$((i + 1)); done
+  if [ "$C" = 1 ]; then
+    printf '%s%s[%sm%s%s\n' "$(_pad "$w")" "$ESC" "$MUTED" "$line" "$RESET"
+  else
+    printf '%s%s\n' "$(_pad "$w")" "$line"
+  fi
+}
 
 # --- pretty printing helpers ----------------------------------------------
 # _info: muted body line.  _ok: completed step with accent ✓.
 # _err: failure with red ✗ on stderr.  _hl: gold inline highlight (paths).
 _info() {
-  if [ "$C" = 1 ]; then printf '  %s[%sm%s%s\n' "$ESC" "$PAPER" "$*" "$RESET";
-  else printf '  %s\n' "$*"; fi
+  if [ "$C" = 1 ]; then printf '    %s[%sm%s%s\n' "$ESC" "$PAPER" "$*" "$RESET";
+  else printf '    %s\n' "$*"; fi
 }
 _ok() {
-  if [ "$C" = 1 ]; then printf '  %s[%sm✓ %s%s\n' "$ESC" "$ACCENT" "$*" "$RESET";
-  else printf '  ✓ %s\n' "$*"; fi
+  if [ "$C" = 1 ]; then printf '    %s[%sm✓ %s%s\n' "$ESC" "$ACCENT" "$*" "$RESET";
+  else printf '    ✓ %s\n' "$*"; fi
 }
 _err() {
-  if [ "$C" = 1 ]; then printf '  %s[%sm✗ %s%s\n' "$ESC" "$ERR" "$*" "$RESET" >&2;
-  else printf '  ERROR: %s\n' "$*" >&2; fi
+  if [ "$C" = 1 ]; then printf '    %s[%sm✗ %s%s\n' "$ESC" "$ERR" "$*" "$RESET" >&2;
+  else printf '    ERROR: %s\n' "$*" >&2; fi
 }
 _hl() {
   if [ "$C" = 1 ]; then printf '%s[%sm%s%s' "$ESC" "$GOLD" "$*" "$RESET";
@@ -72,7 +95,7 @@ _logo() {
 ██      ██   ██ ██  ███ ██   ██ ██   ██
 ██      ██   ██ ██   ██ ██   ██ ██   ██'
   if [ "$C" = 1 ] && command -v awk >/dev/null 2>&1; then
-    printf '%s\n' "$logo" | awk 'BEGIN {
+    printf '%s\n' "$logo" | awk -v pad="$(_pad 41)" 'BEGIN {
       r1=201; g1=138; b1=61    # amber  #c98a3d
       r2=255; g2=216; b2=138   # gold   #ffd88a
       total=205                # 41 chars x 5 lines
@@ -80,6 +103,7 @@ _logo() {
     }
     {
       line=$0; len=length(line)
+      printf "%s", pad
       for (i=1; i<=len; i++) {
         r=int(r1 + (r2-r1) * idx / total)
         g=int(g1 + (g2-g1) * idx / total)
@@ -90,7 +114,7 @@ _logo() {
       printf "\033[0m\n"
     }'
   else
-    printf '%s\n' "$logo"
+    printf '%s\n' "$logo" | sed "s/^/$(_pad 41)/"
   fi
 }
 
@@ -109,7 +133,7 @@ _bar() {
     if (pct > 100) pct = 100
     filled = int(pct / 100 * width + 0.5)
     if (filled > width) filled = width
-    out = "\r  " paper "downloading " label " "
+    out = "\r    " paper "downloading " label " "
     for (i = 0; i < width; i++) {
       t = (width > 1) ? i / (width - 1) : 0
       if (i < filled) {
@@ -145,13 +169,16 @@ _alive() {
 if [ -t 1 ]; then
   printf '\033[2J\033[H'
 fi
+MOTTO="write letters only you will ever read."
 _logo
+echo
 if [ "$C" = 1 ]; then
-  printf '  %s[1;%smwrite letters only you will ever read.%s\n' "$ESC" "$ACCENT" "$RESET"
-  printf '  %s[%sm──────────────────────────────────────%s\n' "$ESC" "$PAPER" "$RESET"
+  printf '%s%s[1;%sm%s%s\n' "$(_pad 38)" "$ESC" "$ACCENT" "$MOTTO" "$RESET"
 else
-  echo "  write letters only you will ever read."
+  printf '%s%s\n' "$(_pad 38)" "$MOTTO"
 fi
+echo
+_rule
 echo
 
 # --- fail loudly on any missing prerequisite -----------------------------
@@ -276,6 +303,11 @@ fi
 # first launch never has to.
 mkdir -p "$HOME/.fanaa"
 
+echo
+_rule
+echo
+_ok "${BIN_VER:-fanaa $VERSION} ready — run 'fanaa tui' to write your first letter."
+
 # --- PATH hint -------------------------------------------------------------
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
@@ -289,6 +321,3 @@ case ":$PATH:" in
     esac
     ;;
 esac
-
-echo
-_ok "${BIN_VER:-fanaa $VERSION} ready — run 'fanaa tui' to write your first letter."
