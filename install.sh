@@ -9,8 +9,12 @@
 # release's SHA256SUMS, and installs it to $FANAA_BIN (~/.local/bin).
 #
 # Env overrides: FANAA_BIN (install dir), FANAA_VERSION (version to install),
-# FANAA_REPO (owner/repo, default FirozChauhan/fanaa), FANAA_BASE (download base URL,
-# defaults to the GitHub release URL — set it to test against a mirror).
+# FANAA_REPO (owner/repo, default FirozChauhan/fanaa), FANAA_BASE (download
+# base URL, defaults to the GitHub release URL — set it to test a mirror).
+#
+# The banner reuses the TUI's boot logo, rendered in the ember palette's
+# amber→gold gradient (packages/tui/src/app.tsx + theme.tsx). Falls back to
+# plain text when stdout isn't a color-capable terminal.
 
 set -eu
 
@@ -19,10 +23,90 @@ VERSION="${FANAA_VERSION:-${1:-}}"
 INSTALL_DIR="${FANAA_BIN:-$HOME/.local/bin}"
 BASE="${FANAA_BASE:-https://github.com/$REPO/releases/download}"
 
+# --- ANSI color support (TTY + terminfo + NO_COLOR) ------------------------
+# Mirrors the TUI's default "ember" palette: amber→gold logo gradient,
+# accent checks, gold highlights, paper body text.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && command -v tput >/dev/null 2>&1 \
+  && [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+  C=1
+else
+  C=0
+fi
+ESC=$(printf '\033')
+RESET="${ESC}[0m"
+# ember palette (theme.tsx) as 24-bit RGB
+AMBER="38;2;201;138;61"
+GOLD="38;2;255;216;138"
+ACCENT="38;2;255;169;77"
+PAPER="38;2;207;199;184"
+ERR="38;2;255;109;109"
+
+# --- pretty printing helpers ----------------------------------------------
+# _info: muted body line.  _ok: completed step with accent ✓.
+# _err: failure with red ✗ on stderr.  _hl: gold inline highlight (paths).
+_info() {
+  if [ "$C" = 1 ]; then printf '  %s[%sm%s%s\n' "$ESC" "$PAPER" "$*" "$RESET";
+  else printf '  %s\n' "$*"; fi
+}
+_ok() {
+  if [ "$C" = 1 ]; then printf '  %s[%sm✓ %s%s\n' "$ESC" "$ACCENT" "$*" "$RESET";
+  else printf '  ✓ %s\n' "$*"; fi
+}
+_err() {
+  if [ "$C" = 1 ]; then printf '  %s[%sm✗ %s%s\n' "$ESC" "$ERR" "$*" "$RESET" >&2;
+  else printf '  ERROR: %s\n' "$*" >&2; fi
+}
+_hl() {
+  if [ "$C" = 1 ]; then printf '%s[%sm%s%s' "$ESC" "$GOLD" "$*" "$RESET";
+  else printf '%s' "$*"; fi
+}
+
+# --- the FANAA boot logo (identical to the TUI's SPLASH_LOGO) -------------
+# 5 lines × 41 chars; gradient runs left→right across the whole block,
+# exactly like the TUI splash (amber → gold).
+_logo() {
+  logo='███████ ███████ ██   ██ ███████ ███████
+██      ██   ██ ███  ██ ██   ██ ██   ██
+███████ ███████ ██ █ ██ ███████ ███████
+██      ██   ██ ██  ███ ██   ██ ██   ██
+██      ██   ██ ██   ██ ██   ██ ██   ██'
+  if [ "$C" = 1 ] && command -v awk >/dev/null 2>&1; then
+    printf '%s\n' "$logo" | awk 'BEGIN {
+      r1=201; g1=138; b1=61    # amber  #c98a3d
+      r2=255; g2=216; b2=138   # gold   #ffd88a
+      total=205                # 41 chars x 5 lines
+      idx=0
+    }
+    {
+      line=$0; len=length(line)
+      for (i=1; i<=len; i++) {
+        r=int(r1 + (r2-r1) * idx / total)
+        g=int(g1 + (g2-g1) * idx / total)
+        b=int(b1 + (b2-b1) * idx / total)
+        printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(line, i, 1)
+        idx++
+      }
+      printf "\033[0m\n"
+    }'
+  else
+    printf '%s\n' "$logo"
+  fi
+}
+
+# --- banner -----------------------------------------------------------------
+_logo
+if [ "$C" = 1 ]; then
+  printf '  %s[1;%smfanaa — curl | sh installer%s\n' "$ESC" "$ACCENT" "$RESET"
+  printf '  %s[%sm──────────────────────────────%s\n' "$ESC" "$PAPER" "$RESET"
+else
+  echo "  fanaa — curl | sh installer"
+fi
+echo
+
 # --- fail loudly on any missing prerequisite -----------------------------
 for cmd in curl uname; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "fanaa: required command not found: $cmd" >&2
+    _err "required command not found: $cmd"
     exit 1
   fi
 done
@@ -34,30 +118,31 @@ case "$OS" in
   Linux)  PLAT="linux" ;;
   Darwin) PLAT="darwin" ;;
   MINGW*|MSYS*|CYGWIN*) PLAT="windows" ;;
-  *) echo "fanaa: unsupported OS: $OS" >&2; exit 1 ;;
+  *) _err "unsupported OS: $OS"; exit 1 ;;
 esac
 case "$ARCH" in
   x86_64|amd64)  HARCH="x64" ;;
   aarch64|arm64) HARCH="arm64" ;;
-  *) echo "fanaa: unsupported architecture: $ARCH" >&2; exit 1 ;;
+  *) _err "unsupported architecture: $ARCH"; exit 1 ;;
 esac
 if [ "$PLAT" = "windows" ]; then
   # Windows is only built for x64; the rest of this script still works under
   # MSYS/Cygwin (curl is present). The binary lands as fanaa.exe.
-  [ "$HARCH" = "arm64" ] && { echo "fanaa: no Windows arm64 build" >&2; exit 1; }
+  [ "$HARCH" = "arm64" ] && { _err "no Windows arm64 build"; exit 1; }
   EXE=".exe"
 else
   EXE=""
 fi
 ASSET="fanaa-$PLAT-$HARCH$EXE"
-echo "fanaa: installing $ASSET${VERSION:+ (version $VERSION)} to $INSTALL_DIR"
+_info "installing $ASSET${VERSION:+ ($VERSION)} to $INSTALL_DIR"
 
 # --- resolve version (default: latest release) ----------------------------
 if [ -z "$VERSION" ]; then
-  echo "fanaa: resolving latest release…"
+  _info "resolving latest release …"
   TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
-  [ -n "$TAG" ] || { echo "fanaa: could not resolve latest release" >&2; exit 1; }
+  [ -n "$TAG" ] || { _err "could not resolve latest release"; exit 1; }
   VERSION="$TAG"
+  _ok "resolved $(_hl "$VERSION")"
 fi
 # normalize: accept "0.8.1" or "v0.8.1"
 case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
@@ -66,7 +151,7 @@ case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 TMP="$(mktemp -d 2>/dev/null || mktemp -d /tmp/fanaa.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "fanaa: downloading $BASE/$VERSION/$ASSET"
+_info "downloading $(_hl "$ASSET")"
 curl -fsSL "$BASE/$VERSION/$ASSET" -o "$TMP/$ASSET"
 curl -fsSL "$BASE/$VERSION/SHA256SUMS" -o "$TMP/SHA256SUMS"
 
@@ -75,17 +160,17 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
   CHECK="shasum -a 256 -c"
 else
-  echo "fanaa: no sha256sum/shasum available — refusing to install unverified binary" >&2
+  _err "no sha256sum/shasum available — refusing to install unverified binary"
   exit 1
 fi
 # verify the downloaded asset against the release's checksum file
 # (sha256sum -c reads the checksums FROM SHA256SUMS; --ignore-missing
 # only checks the file we actually downloaded).
 if ! (cd "$TMP" && $CHECK --ignore-missing SHA256SUMS >/dev/null 2>&1); then
-  echo "fanaa: SHA-256 verification failed for $ASSET — aborting" >&2
+  _err "SHA-256 verification failed for $ASSET — aborting"
   exit 1
 fi
-echo "fanaa: checksum OK"
+_ok "checksum OK"
 
 chmod +x "$TMP/$ASSET"
 
@@ -95,11 +180,13 @@ INSTALLED="$INSTALL_DIR/fanaa$EXE"
 mv -f "$TMP/$ASSET" "$INSTALLED"
 
 # --- post-install sanity --------------------------------------------------
+BIN_VER=""
 if [ -z "$EXE" ]; then
+  _ok "installed at $(_hl "$INSTALLED")"
   if "$INSTALLED" --version >/dev/null 2>&1; then
-    echo "fanaa: installed $("$INSTALLED" --version) at $INSTALLED"
+    BIN_VER="$("$INSTALLED" --version 2>/dev/null | head -1)"
   else
-    echo "fanaa: installed, but the binary did not run cleanly — check $INSTALLED" >&2
+    _err "installed, but the binary did not run cleanly — check $INSTALLED"
     exit 1
   fi
 fi
@@ -113,13 +200,14 @@ case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
     echo
-    echo "fanaa: $INSTALL_DIR is not on your PATH."
+    _info "$INSTALL_DIR is not on your PATH."
     case "$(basename "$SHELL" 2>/dev/null || echo sh)" in
-      zsh) echo "       add to ~/.zshrc:  export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
-      bash) echo "       add to ~/.bashrc: export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
-      *) echo "       add to your shell rc: export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
+      zsh)  _info "add to ~/.zshrc:  export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
+      bash) _info "add to ~/.bashrc: export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
+      *)    _info "add to your shell rc: export PATH=\"$INSTALL_DIR:\$PATH\"" ;;
     esac
     ;;
 esac
 
-echo "fanaa: done — run 'fanaa tui' to write your first letter."
+echo
+_ok "${BIN_VER:-fanaa $VERSION} ready — run 'fanaa tui' to write your first letter."
