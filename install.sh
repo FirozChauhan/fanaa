@@ -190,8 +190,15 @@ _info "installing $ASSET${VERSION:+ ($VERSION)} to $INSTALL_DIR"
 # --- resolve version (default: latest release) ----------------------------
 if [ -z "$VERSION" ]; then
   _info "resolving latest release …"
-  TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
-  [ -n "$TAG" ] || { _err "could not resolve latest release"; exit 1; }
+  # GitHub's /releases/latest redirects to /releases/tag/<tag>.
+  # This is the main site, NOT api.github.com — no rate limit.
+  TAG_URL="$(curl -fsSI -o /dev/null -w '%{redirect_url}' "https://github.com/$REPO/releases/latest" 2>/dev/null)" || TAG_URL=""
+  TAG="${TAG_URL##*/}"
+  # Fallback: GitHub API (rate-limited to 60 req/hr unauthenticated)
+  if [ -z "$TAG" ]; then
+    TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+  [ -n "$TAG" ] || { _err "could not resolve latest release (try: FANAA_VERSION=v0.9.0)"; exit 1; }
   VERSION="$TAG"
   _ok "resolved $(_hl "$VERSION")"
 fi
@@ -205,7 +212,9 @@ trap 'rm -rf "$TMP"' EXIT
 URL="$BASE/$VERSION/$ASSET"
 if [ -t 1 ]; then
   # Terminal: animate a custom gradient bar while the asset downloads.
-  TOTAL=$(curl -fsSL -I "$URL" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^content-length:/{gsub("\r",""); print $2; exit}') || TOTAL=0
+  # HEAD request hops through redirects (302 → 200), each hop carrying its
+  # own content-length; keep the LAST one — the real asset size.
+  TOTAL=$(curl -fsSL -I "$URL" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^content-length:/{val=$2} END{gsub("\r","",val); print val}') || TOTAL=0
   : "${TOTAL:=0}"
   curl -fsSL "$URL" -o "$TMP/$ASSET" &
   CPID=$!
