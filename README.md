@@ -7,7 +7,6 @@
 ![Postgres](https://img.shields.io/badge/Neon%20Postgres-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 ![Clerk](https://img.shields.io/badge/Clerk-6C47FF?style=for-the-badge&logo=clerk&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
 
 > Write letters only you will ever read.
 > From whoever you want to be. To whoever you love.
@@ -29,7 +28,6 @@ ever a backup, never a requirement.
 | Database | [Neon Postgres](https://neon.tech) (pooled connection) |
 | Auth | [Clerk](https://clerk.com) (email-code OTP) |
 | Storage | Local markdown files + git history |
-| CI/CD | [GitHub Actions](https://github.com/features/actions) (multi-arch release, smoke tests) |
 
 ## Getting started
 
