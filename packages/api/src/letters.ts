@@ -39,6 +39,8 @@ interface LetterRow {
 const KEY_RE = /^\d{4}-\d{2}-\d{2}-\d{4}(-[A-Za-z0-9]+)*$/;
 /** Cap a single push batch — a sync round chunks at 50, so 500 is generous. */
 const MAX_BATCH = 500;
+/** Cap a single letter body (chars) — ~1 MB, ~10x any real journal entry. */
+const MAX_BODY_LENGTH = 1_000_000;
 
 export const letters = new Hono<ApiEnv>();
 letters.use("*", requireUser);
@@ -101,11 +103,18 @@ letters.post("/batch", async (c) => {
     if (!KEY_RE.test(id)) {
       return c.json({ error: `malformed letter id: ${JSON.stringify(id)}` }, 400);
     }
+    const body = String(it?.body ?? "");
+    if (body.length > MAX_BODY_LENGTH) {
+      // Reject the whole batch, not just the item: the client's outbox
+      // watermark advances on a successful push, so silently skipping an
+      // oversized item would permanently drop that letter from future syncs.
+      return c.json({ error: `letter body too large (max ${MAX_BODY_LENGTH} chars)` }, 400);
+    }
     const date = it?.date ? new Date(it.date) : new Date();
     const updated = it?.updated_at ? new Date(it.updated_at) : new Date();
     const res = (await s`
       INSERT INTO letters (id, user_id, date, from_addr, to_addr, subject, body, updated_at)
-      VALUES (${id}, ${user.id}, ${date}, ${String(it?.from ?? "") || user.email}, ${String(it?.to ?? "")}, ${String(it?.subject ?? "")}, ${String(it?.body ?? "")}, ${updated})
+      VALUES (${id}, ${user.id}, ${date}, ${String(it?.from ?? "") || user.email}, ${String(it?.to ?? "")}, ${String(it?.subject ?? "")}, ${body}, ${updated})
       ON CONFLICT (user_id, id) DO UPDATE SET
         date = EXCLUDED.date, from_addr = EXCLUDED.from_addr, to_addr = EXCLUDED.to_addr,
         subject = EXCLUDED.subject, body = EXCLUDED.body,

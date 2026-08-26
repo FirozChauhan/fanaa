@@ -2,9 +2,21 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { db } from "./db";
 import { sendVerificationCode } from "./email";
 import { attemptVerification, ensureUser, prepareVerification } from "./clerk";
-import { CLERK_SECRET_KEY, CODE_RESEND_COOLDOWN_SECONDS, CODE_TTL_SECONDS, SESSION_TTL_SECONDS } from "./env";
+import { ALLOW_DEV_AUTH, CLERK_SECRET_KEY, CODE_RESEND_COOLDOWN_SECONDS, CODE_TTL_SECONDS, IP_WINDOW_SECONDS, SESSION_TTL_SECONDS } from "./env";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Client IP for rate limiting. Cloudflare Workers set CF-Connecting-IP;
+ * local dev falls back to X-Forwarded-For (first hop) or "local".
+ */
+function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
+  return (
+    c.req.header("CF-Connecting-IP") ??
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "local"
+  );
+}
 
 /** Failed verify attempts allowed per code before it is burned. */
 const MAX_CODE_ATTEMPTS = 5;
@@ -33,6 +45,14 @@ auth.post("/request", async (c) => {
   if (!EMAIL_RE.test(email)) return c.json({ error: "invalid email" }, 400);
 
   const s = await db();
+  // Per-IP limiter (email-bombing relay guard): the email cooldown below is
+  // per-address, so without this an attacker could loop many addresses and
+  // make Clerk mail each one. One request per IP per window.
+  const ip = clientIp(c);
+  const ipRows = (await s`SELECT created_at FROM rate_limits WHERE key = ${`ip:${ip}`}`) as { created_at: Date | string }[];
+  if (ipRows[0] && Date.now() - new Date(ipRows[0].created_at).getTime() < IP_WINDOW_SECONDS * 1000) {
+    return c.json({ error: "slow down — wait a minute before requesting another code" }, 429);
+  }
   // Rate limit FIRST, for BOTH paths — without it /auth/request is an open
   // email-bombing relay (Clerk sends a real email to any address, and even
   // the dev path spams the console/logs). One request per email per window.
@@ -40,6 +60,10 @@ auth.post("/request", async (c) => {
   if (recent[0] && Date.now() - new Date(recent[0].created_at).getTime() < CODE_RESEND_COOLDOWN_SECONDS * 1000) {
     return c.json({ error: "slow down — wait a minute before requesting another code" }, 429);
   }
+  // Request accepted — stamp this IP (next one from here waits a window)
+  // and opportunistically purge stale rows so the table stays bounded.
+  await s`INSERT INTO rate_limits (key) VALUES (${`ip:${ip}`}) ON CONFLICT (key) DO UPDATE SET created_at = now()`;
+  await s`DELETE FROM rate_limits WHERE created_at < now() - interval '1 day'`;
 
   if (CLERK_SECRET_KEY) {
     let verificationId: string;
@@ -56,6 +80,12 @@ auth.post("/request", async (c) => {
     return c.json({ ok: true, channel: "email", verification_id: verificationId });
   }
 
+  if (!ALLOW_DEV_AUTH) {
+    // Fail CLOSED: without the explicit dev-auth flag, a deploy that lost
+    // its Clerk key must not fall back to console-logged codes (anyone with
+    // log access could mint a session for any email).
+    return c.json({ error: "auth unavailable — server has no auth backend configured" }, 503);
+  }
   // 6 digits from a CSPRNG — never Math.random.
   const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000);
@@ -101,6 +131,9 @@ auth.post("/verify", async (c) => {
       return c.json({ error: "invalid or expired code" }, 401);
     }
   } else {
+    if (!ALLOW_DEV_AUTH) {
+      return c.json({ error: "auth unavailable — server has no auth backend configured" }, 503);
+    }
     // Dev path: local auth_codes row. Attempt-limited (MAX_CODE_ATTEMPTS
     // misses burn the code — brute-forcing 6 digits would need a fresh email
     // per 5 tries, and each email is cooldown-gated). A successful or burned
