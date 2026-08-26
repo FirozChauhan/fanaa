@@ -12,9 +12,10 @@
 # FANAA_REPO (owner/repo, default FirozChauhan/fanaa), FANAA_BASE (download
 # base URL, defaults to the GitHub release URL — set it to test a mirror).
 #
-# The banner reuses the TUI's boot logo, rendered in the ember palette's
-# amber→gold gradient (packages/tui/src/app.tsx + theme.tsx). Falls back to
-# plain text when stdout isn't a color-capable terminal.
+# On a terminal: clears the screen, prints the TUI boot logo in the ember
+# palette's amber→gold gradient, and animates a matching gradient progress
+# bar while downloading. Falls back to plain text + silent curl when piped
+# or logged.
 
 set -eu
 
@@ -93,7 +94,57 @@ _logo() {
   fi
 }
 
+# --- gradient progress bar -------------------------------------------------
+# _bar HAVE TOTAL LABEL — one frame of the download bar; the filled cells
+# interpolate amber→gold (same gradient as the logo). Uses \r, no newline.
+_bar() {
+  awk -v have="$1" -v total="$2" -v label="$3" 'BEGIN {
+    esc = sprintf("%c", 27)
+    res = esc "[0m"
+    faint = esc "[38;2;92;86;77m"    # empty track
+    paper = esc "[38;2;207;199;184m"
+    bold  = esc "[1m"
+    width = 28
+    pct = (total > 0) ? have * 100 / total : 0
+    if (pct > 100) pct = 100
+    filled = int(pct / 100 * width + 0.5)
+    if (filled > width) filled = width
+    out = "\r  " paper "downloading " label " "
+    for (i = 0; i < width; i++) {
+      t = (width > 1) ? i / (width - 1) : 0
+      if (i < filled) {
+        r = int(201 + (255 - 201) * t)
+        g = int(138 + (216 - 138) * t)
+        b = int(61  + (138 - 61)  * t)
+        out = out esc sprintf("[38;2;%d;%d;%dm", r, g, b) "█"
+      } else {
+        out = out faint "░"
+      }
+    }
+    out = out res " " bold sprintf("%3d%%", pct) res
+    if (total > 0) {
+      out = out " " esc "[38;2;255;169;77m" sprintf("%.1f", have / 1048576) \
+              " / " esc "[38;2;255;216;138m" sprintf("%.1f", total / 1048576) " MiB"
+    } else {
+      out = out " " esc "[38;2;255;169;77m" sprintf("%.1f", have / 1048576) " MiB"
+    }
+    printf "%s", out
+  }'
+}
+
+# _alive PID — 0 while the pid is still running; non-zero once it has exited
+# (zombies count as gone, so the poll loop can't spin on a finished curl).
+_alive() {
+  st=$(ps -p "$1" -o stat= 2>/dev/null) || return 1
+  [ -n "$st" ] || return 1
+  case "$st" in *Z*|*X*) return 1 ;; esac
+}
+
 # --- banner -----------------------------------------------------------------
+# The installer owns the screen on a terminal — clear it before painting.
+if [ -t 1 ]; then
+  printf '\033[2J\033[H'
+fi
 _logo
 if [ "$C" = 1 ]; then
   printf '  %s[1;%smwrite letters only you will ever read.%s\n' "$ESC" "$ACCENT" "$RESET"
@@ -151,15 +202,29 @@ case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
 TMP="$(mktemp -d 2>/dev/null || mktemp -d /tmp/fanaa.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 
-# Show curl's own progress bar only when stderr is a terminal; keep downloads
-# silent otherwise (piped/logged runs shouldn't spam the bar).
-if [ -t 2 ]; then
-  PB="--progress-bar"
+URL="$BASE/$VERSION/$ASSET"
+if [ -t 1 ]; then
+  # Terminal: animate a custom gradient bar while the asset downloads.
+  TOTAL=$(curl -fsSL -I "$URL" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^content-length:/{gsub("\r",""); print $2; exit}') || TOTAL=0
+  : "${TOTAL:=0}"
+  curl -fsSL "$URL" -o "$TMP/$ASSET" &
+  CPID=$!
+  while _alive "$CPID"; do
+    HAVE=$(test -f "$TMP/$ASSET" && wc -c < "$TMP/$ASSET" || echo 0)
+    _bar "$HAVE" "$TOTAL" "$ASSET"
+    sleep 0.1
+  done
+  HAVE=$(test -f "$TMP/$ASSET" && wc -c < "$TMP/$ASSET" || echo 0)
+  _bar "$HAVE" "$TOTAL" "$ASSET"
+  printf '\n'
+  if ! wait "$CPID"; then
+    _err "download failed — check your connection"
+    exit 1
+  fi
 else
-  PB="-s"
+  _info "downloading $(_hl "$ASSET")"
+  curl -fsSL "$URL" -o "$TMP/$ASSET"
 fi
-_info "downloading $(_hl "$ASSET")"
-curl -fL $PB "$BASE/$VERSION/$ASSET" -o "$TMP/$ASSET"
 curl -fsSL "$BASE/$VERSION/SHA256SUMS" -o "$TMP/SHA256SUMS"
 
 if command -v sha256sum >/dev/null 2>&1; then
