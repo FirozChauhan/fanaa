@@ -5,3 +5,6 @@ node_modules/
 !.env.example
 typescript
 .wrangler/
+/fanaa
+/fanaa.exe
+dist/

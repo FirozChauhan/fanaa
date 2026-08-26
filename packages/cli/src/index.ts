@@ -13,6 +13,7 @@ import { renderEntry, dim } from "./render";
 import { cmdLogin, cmdLogout, cmdName, cmdSync } from "./syncCli";
 import { recordDelete } from "fanaa-sync";
 import { runTui } from "fanaa-tui";
+import pkg from "../package.json" with { type: "json" };
 
 /**
  * Binary dispatch: the compiled `fanaa` executable re-execs itself with
@@ -274,6 +275,10 @@ async function main(): Promise<void> {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "-v" || a === "--values") values = true;
+    else if (a === "--version") {
+      console.log(`fanaa ${pkg.version}`);
+      return;
+    }
     else if (a === "--from") from = args[++i];
     else if (a === "--to") to = args[++i];
     else if (a === "--cat" || a === "--category") category = args[++i];

@@ -10,6 +10,20 @@ backup, never a requirement.
 
 ## Install
 
+**Prebuilt binary (recommended)** — no Bun needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FirozChauhan/fanaa/main/install.sh | sh
+```
+
+Installs the latest release to `~/.local/bin/fanaa` (override with
+`FANAA_BIN`), verifies the SHA-256 checksum, and creates `~/.fanaa`.
+Pin a version with `| sh -s -- v0.8.1`. Linux (x64/arm64), macOS
+(x64/arm64), and Windows x64 (via MSYS/Cygwin) are prebuilt on every
+`v*` tag — see [the release workflow](.github/workflows/release.yml).
+
+**From source:**
+
 ```bash
 cd packages/cli
 bun install
