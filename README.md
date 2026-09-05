@@ -2,13 +2,13 @@
 
 Terminal-first daily journal — every entry is a letter, stamped with a date, addressed from a persona to a recipient, stored as plain markdown on your disk.
 
-![Bun](https://img.shields.io/badge/Bun-000000?logo=bun&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React_Ink-61DAFB?logo=react&logoColor=black)
-![Hono](https://img.shields.io/badge/Hono-E36002?logo=hono&logoColor=white)
-![Cloudflare Workers](https://img.shields.io/badge/CF_Workers-F38020?logo=cloudflare&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/Neon_Postgres-316192?logo=postgresql&logoColor=white)
-![Clerk](https://img.shields.io/badge/Clerk-6C47FF?logo=clerk&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-161B22?style=for-the-badge&logo=bun&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-161B22?style=for-the-badge&logo=typescript&logoColor=white)
+![React Ink](https://img.shields.io/badge/React_Ink-161B22?style=for-the-badge&logo=react&logoColor=white)
+![Hono](https://img.shields.io/badge/Hono-161B22?style=for-the-badge&logo=hono&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/CF_Workers-161B22?style=for-the-badge&logo=cloudflare&logoColor=white)
+![Neon Postgres](https://img.shields.io/badge/Neon_Postgres-161B22?style=for-the-badge&logo=postgresql&logoColor=white)
+![Clerk](https://img.shields.io/badge/Clerk-161B22?style=for-the-badge&logo=clerk&logoColor=white)
 
 ## Install
 
